@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "*.embeddedhtml": "html",
+        "vector": "c",
+        "stdlib.h": "c",
+        "utility": "c",
+        "xmemory": "c",
+        "xutility": "c"
+    }
+}
