@@ -5,6 +5,10 @@
         "stdlib.h": "c",
         "utility": "c",
         "xmemory": "c",
-        "xutility": "c"
-    }
+        "xutility": "c",
+        "type_traits": "c",
+        "xtr1common": "c",
+        "initializer_list": "c"
+    },
+    "clang-format.executable": "${env.HOME}/tools/clang38/clang-format"
 }

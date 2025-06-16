@@ -17,6 +17,7 @@
         // Log - L
         // Pol( - P
         // Rec( - R
+        // PI = 3.142...
          ---------------------
  * @param {string} expression 
  * @returns 
@@ -39,6 +40,7 @@ function change_expression_to_array(expression) {
     expression = expression.replace(/Pol/gmi, 'P')
     expression = expression.replace(/Rec/gmi, 'R')
     expression = expression.replace(/X/gmi, '*')
+    xpression = expression.replace(/PI/gmi, 'p')
 
     // Turn string expression into array - 13.25 * 2 = ['1', '3', '.', '2', '5', '*', '2'];
     return expression.split('');
@@ -100,7 +102,7 @@ function change_string_numbers_to_integers(expression_as_array = []) {
                 }
 
                 // reset start position
-                start == -1;
+                start = -1;
                 break;
 
             }
@@ -118,15 +120,19 @@ function change_string_numbers_to_integers(expression_as_array = []) {
  * @param {Array} expression_as_array 
  */
 function construct_decimal_numbers(expression_as_array = []) {
-    while (expression_as_array.includes('.')) {
+    while (expression_as_array.includes('.')) { 
+
+        // check if decimal is in the wrong place
         const i = expression_as_array.indexOf('.')
-        if ((i - 1 < 0) || (i + 1 > expression_as_array.length - 1)) throw new Error('Could not parse decimal');
+        if ((i - 1 < 0) || (i + 1 > expression_as_array.length - 1)) throw new Error('Math Error: Could not parse decimal');
         const num1 = expression_as_array[i - 1]; // number before decimal
         const num2 = expression_as_array[i + 1]; // number after decimal
-        // e.g 134 . 1414  = 134.1414
-        const number = parseFloat(`${num1}.${num2}`);
 
-        if (num1 == 0) {
+        if(isNaN(num1) || isNaN(num2)) throw new Error('Math Error: Could not parse decimal');
+
+        const number = parseFloat(`${num1}.${num2}`); // e.g 134 . 1414  = 134.1414
+
+        if (i == 0) {
             expression_as_array.unshift(number);
             expression_as_array.splice(1, 3);
         }
@@ -508,8 +514,15 @@ function calculate(expression) {
     list = change_string_numbers_to_integers(list); // combine string numbers into one number
     list = construct_decimal_numbers(list); // construct decimal numbers
 
+    // replace constants
+    for(const i in list) {
+        if(list[i] == 'p') list[i] = Math.PI;
+    }
+
     // recursive calcalutions until answer is found.
     while (list.includes('(')) list = calculate_innermost_brackets(list, math_calculation);
     while (list.length > 1) list = math_calculation(list);
     return list[0];
 }
+
+console.log(calculate("PI*1"));
