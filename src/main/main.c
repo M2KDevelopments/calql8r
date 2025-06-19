@@ -23,7 +23,15 @@
 #define OPERATOR_LOGx 'l'
 #define OPERATOR_POW '^'
 #define OPERATOR_ROOT 'r'
-
+#define OPERATOR_SIN 'S'
+#define OPERATOR_SINH 's'
+#define OPERATOR_COS 'C'
+#define OPERATOR_COSH 'c'
+#define OPERATOR_TAN 'T'
+#define OPERATOR_TANH 't'
+#define OPERATOR_LOG10 'L'
+#define OPERATOR_LN 'E'
+#define PI 'p'
 
 
 struct Element{
@@ -227,7 +235,7 @@ struct ElementItems construct_decimal_numbers(struct Element* elements, int len)
                 struct Element ele_right = elements[i+1];
 
                 // Check if either left or right number is not a valid number
-                if(ele_left.type != NUMBER || ele_left.type != NUMBER) {
+                if(ele_left.type != NUMBER || ele_right.type != NUMBER) {
                     struct ElementItems e;
                     e.size = 0;
                     e.error = "Math Error: Could not parse decimal";
@@ -271,7 +279,7 @@ struct ElementItems construct_decimal_numbers(struct Element* elements, int len)
     // Remove decimal points and right number
     // #1.#2 remove . and #2 
     int size = len - (decimal_count * 2);
-    struct Element* list = (struct Element*) malloc(sizeof(elements) * size);
+    struct Element* list = (struct Element*) malloc(sizeof(struct Element) * size);
 
     // Add elements to array
     int j =0;
@@ -288,6 +296,23 @@ struct ElementItems construct_decimal_numbers(struct Element* elements, int len)
 
 }
 
+struct ElementItems convert_constant_pi(struct Element* elements, int len){
+    for(int i =0; i< len; i++){
+        if(elements[i].type == PI){
+            elements[i].type = NUMBER;
+            elements[i].value = acos(-1.0);
+            elements[i].integers = 3;
+        }
+    }
+    // Construct new element list
+    struct ElementItems items;
+    items.elements = elements;
+    items.size = len;
+    return items;
+}
+
+
+ 
 // check if symbol still exists
 int symbol_exists(struct Element* elements, int length, char symbol){
     for(int i = 0 ; i < length; i++){
@@ -298,6 +323,48 @@ int symbol_exists(struct Element* elements, int length, char symbol){
 }
 
 /**
+ * Calculate expression which require 1 numbers e.g Sin30 or 0.5 
+ * Right is NOT a number it will just skip because it might be an expression. So that it can be calculate it later when the expression is calculate by other functions
+ */
+struct ElementFuncProps calculate_1_value_expressions_props(char function_symbol, struct Element* elements, int len, const char* error_message){
+    
+    for(int i = 0; i < len; i++){
+        struct Element ele = *(elements + i);
+            
+        // find the symbol
+        if(ele.type == function_symbol) {
+
+            // check if symbol is in the wrong place
+            if ((i + 1 > len - 1)) {
+                struct ElementFuncProps e;
+                e.symbol_index = FUNCTION_ERROR;
+                e.error = error_message;
+                return e;  
+            }
+
+            // Get left and right number
+            struct Element ele_right = elements[i+1];
+
+            // Check if either left or right number is not a valid number
+            if(ele_right.type == NUMBER) {
+                struct ElementFuncProps e;
+                e.symbol_index = i;
+                e.num1 = ele_right.value;
+                e.num2 = ele_right.value;
+                return e; 
+            }
+            // if left element and right are NOT both numbers just skip because it might be an express
+            // so we will calculate it later when the expression is calculate by other functions
+        } 
+    }
+ 
+    struct ElementFuncProps ok;
+    ok.symbol_index = FUNCTION_OK;
+    return ok;  
+}
+
+
+/**
  * Calculate expression which require 2 numbers e.g 5*5 or 5+2 or 3^4 
  * if left element and right are NOT both numbers it will just skip because it might be an expression. So that it can be calculate it later when the expression is calculate by other functions
  */
@@ -306,10 +373,10 @@ struct ElementFuncProps calculate_2_value_expressions_props(char function_symbol
     for(int i = 0; i < len; i++){
             struct Element ele = *(elements + i);
             
-            // find the decimal points
+            // find the symbol
             if(ele.type == function_symbol) {
 
-                // check if decimal is in the wrong place
+                // check if symbol is in the wrong place
                 if ((i - 1 < 0) || (i + 1 > len - 1)) {
                     struct ElementFuncProps e;
                     e.symbol_index = FUNCTION_ERROR;
@@ -345,13 +412,13 @@ struct ElementItems calculate_2_value_expressions(struct Element* list, int leng
     
     // This item has an error
     if(!length) {
-            // if left element and right are NOT both numbers just skip because it might be an express
-            // so we will calculate it later when the expression is calculate by other functions
-            struct ElementItems e;
-            e.elements = list;
-            e.size = length;
-            return e; 
-        } 
+        // if left element and right are NOT both numbers just skip because it might be an express
+        // so we will calculate it later when the expression is calculate by other functions
+        struct ElementItems e;
+        e.elements = list;
+        e.size = length;
+        return e; 
+    } 
     
     // Get elements
     struct Element* elements = list;
@@ -368,6 +435,7 @@ struct ElementItems calculate_2_value_expressions(struct Element* list, int leng
         if (props.symbol_index == FUNCTION_ERROR){
             struct ElementItems e;
             e.size = 0;
+            e.error = "Function Error";
             return e;
         } else if(props.symbol_index == FUNCTION_OK){
             // if left element and right are NOT both numbers just skip because it might be an express
@@ -395,7 +463,8 @@ struct ElementItems calculate_2_value_expressions(struct Element* list, int leng
         
         // Math calculation here
         double value = callbackFunction(props.num1, props.num2);
-       
+        
+
         // Set to remove the other nubmers
         elements[props.symbol_index-1].value = value;
         elements[props.symbol_index].type = NUMBER_REMOVE;
@@ -422,6 +491,126 @@ struct ElementItems calculate_2_value_expressions(struct Element* list, int leng
     e.size = len;
     return e;
 }
+
+
+struct ElementItems calculate_1_value_expressions(struct Element* list, int length, char symbol_char, int error_on_zero, int error_on_negative, double (*callbackFunction) (double)){
+    
+    // This item has an error
+    if(!length) {
+        // if left element and right are NOT both numbers just skip because it might be an express
+        // so we will calculate it later when the expression is calculate by other functions
+        struct ElementItems e;
+        e.elements = list;
+        e.size = length;
+        return e; 
+    } 
+    
+    // Get elements
+    struct Element* elements = list;
+    struct ElementItems data;
+    data.size = 0;
+
+
+    int len = length;
+    int symbol_available = symbol_exists(list, length, symbol_char);
+    
+
+    while(symbol_available){
+        struct ElementFuncProps props = calculate_1_value_expressions_props(symbol_char, elements, len, "Math Error");
+        if (props.symbol_index == FUNCTION_ERROR){
+            struct ElementItems e;
+            e.size = 0;
+            return e;
+        } else if(props.symbol_index == FUNCTION_OK){
+            // if left element and right are NOT both numbers just skip because it might be an express
+            // so we will calculate it later when the expression is calculate by other functions
+              struct ElementItems e;
+                e.elements = list;
+                e.size = length;
+                return e;
+        } 
+        
+        // Check for math error
+        if (props.num1 == 0 && error_on_zero == TRUE){
+            struct ElementItems e;
+            e.size = 0;
+            e.error = "Math Error: Dividing by 0";
+            return e;
+        }
+
+        if(error_on_negative && props.num1 < 0){
+            struct ElementItems e;
+            e.size = 0;
+            e.error = "Math Error: Calculation on negative number";
+            return e;
+        }
+        
+        // Math calculation here
+        double value = callbackFunction(props.num1);
+       
+        // Set to remove the other nubmers
+        elements[props.symbol_index].type = NUMBER_REMOVE;
+        elements[props.symbol_index + 1].type = NUMBER_REMOVE;
+
+        // reassign items - new memory was created here
+        if(data.size) free(data.elements);
+        struct ElementItems data = remove_string_numbers(elements, len);
+
+        // free memory - from function parameter
+        if(elements && !data.size) free(elements);
+
+        // update element
+        elements = data.elements;
+        len = data.size;
+
+        // re-check for symbol
+        symbol_available = symbol_exists(elements, len, symbol_char);
+    }
+
+    // Return Elements after calculation
+    struct ElementItems e;
+    e.elements = elements;
+    e.size = len;
+    return e;
+}
+
+
+double calculate_sin(double num){
+    return sin(num);
+}
+
+double calculate_sinh(double num){
+    return sinh(num);
+}
+
+double calculate_cos(double num){
+    return cos(num);
+}
+
+double calculate_cosh(double num){
+    return cosh(num);
+}
+
+double calculate_tan(double num){
+    return tan(num);
+}
+
+double calculate_tanh(double num){
+    return tanh(num);
+}
+
+double calculate_log10(double num){
+    return log10(num);
+}
+
+double calculate_ln(double num){
+    return log(num)/log(exp(1));
+}
+
+double calculate_e(double num){
+    return exp(num);
+}
+
 
 
 double calculate_add(double num1, double num2){
@@ -467,35 +656,46 @@ void printexpression(struct Element* list, int len){
 
 int main(){
    
-    const char expression[] = "1+225+55.7 36 63-9+8* 9 /8 + 2^2 + 2r4 ";
+    const char expression[] = "1+225+55.7 36 63-9+8* 9 /8 + 2^2 + 2r4 + p";
     char* elements = trim(expression);
     int len = strlen(elements);
     
-
     // Get Elements of the expression
     struct Element* list = construct_elements_array(elements);
     list = construct_numbers_from_string_of_integers(list, len);  
     struct ElementItems data = remove_string_numbers(list, len);
-
-    list = data.elements;
+    
     data = construct_decimal_numbers(data.elements, data.size);
+    data = convert_constant_pi(data.elements, data.size);
+    
+    // calculate trigonometry
+    data = calculate_1_value_expressions(data.elements, data.size, OPERATOR_SIN, FALSE, FALSE, calculate_sin);
+    data = calculate_1_value_expressions(data.elements, data.size, OPERATOR_SINH, FALSE, FALSE, calculate_sinh);
+    data = calculate_1_value_expressions(data.elements, data.size, OPERATOR_COS, FALSE, FALSE, calculate_cos);
+    data = calculate_1_value_expressions(data.elements, data.size, OPERATOR_COSH, FALSE, FALSE, calculate_cosh);
+    data = calculate_1_value_expressions(data.elements, data.size, OPERATOR_TAN, FALSE, FALSE, calculate_tan);
+    data = calculate_1_value_expressions(data.elements, data.size, OPERATOR_TANH, FALSE, FALSE, calculate_tanh);
 
-    printexpression(data.elements, data.size);
-    if(list) free(list); // free up memory
+    // calulate logarithms
+    data = calculate_1_value_expressions(data.elements, data.size, OPERATOR_LOG10, FALSE, FALSE, calculate_log10);
+    data = calculate_1_value_expressions(data.elements, data.size, OPERATOR_LN, FALSE, FALSE, calculate_ln);
+    data = calculate_2_value_expressions(data.elements, data.size, OPERATOR_LOGx, FALSE, FALSE, calculate_log);
 
-    // free up memory - these functions
-    list = data.elements;
+    // calculate exponents and roots
+    data = calculate_2_value_expressions(data.elements, data.size, OPERATOR_POW, FALSE, FALSE, calculate_root);
     data = calculate_2_value_expressions(data.elements, data.size, OPERATOR_POW, FALSE, FALSE, calculate_pow);
     data = calculate_2_value_expressions(data.elements, data.size, OPERATOR_ROOT, FALSE, TRUE, calculate_root);
     data = calculate_2_value_expressions(data.elements, data.size, OPERATOR_LOGx, FALSE, FALSE, calculate_log);
+
+    // calculate basic arithmitic
     data = calculate_2_value_expressions(data.elements, data.size, OPERATOR_DIVIDE, TRUE, FALSE,calculate_divide);
     data = calculate_2_value_expressions(data.elements, data.size, OPERATOR_MULTPILY, FALSE, FALSE, calculate_multiply);
     data = calculate_2_value_expressions(data.elements, data.size, OPERATOR_SUBSTRACT, FALSE, FALSE, calculate_substract);
     data = calculate_2_value_expressions(data.elements, data.size, OPERATOR_ADD, FALSE, FALSE, calculate_add);
     printexpression(data.elements, data.size);
-  
     
     // free up memory
+    if(list) free(list); // free up memory
     if(elements) free(elements);
 
     return 0;

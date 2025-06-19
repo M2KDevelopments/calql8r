@@ -40,7 +40,7 @@ function change_expression_to_array(expression) {
     expression = expression.replace(/Pol/gmi, 'P')
     expression = expression.replace(/Rec/gmi, 'R')
     expression = expression.replace(/X/gmi, '*')
-    xpression = expression.replace(/PI/gmi, 'p')
+    expression = expression.replace(/PI/gmi, 'p')
 
     // Turn string expression into array - 13.25 * 2 = ['1', '3', '.', '2', '5', '*', '2'];
     return expression.split('');
@@ -525,4 +525,4 @@ function calculate(expression) {
     return list[0];
 }
 
-console.log(calculate("PI*1"));
+console.log(calculate("PI"));
