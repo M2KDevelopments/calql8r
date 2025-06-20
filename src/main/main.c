@@ -32,7 +32,8 @@
 #define OPERATOR_LOG10 'L'
 #define OPERATOR_LN 'E'
 #define PI 'p'
-
+#define BRACKET_OPEN '('
+#define BRACKET_CLOSE ')'
 
 struct Element{
     double value;
@@ -611,8 +612,6 @@ double calculate_e(double num){
     return exp(num);
 }
 
-
-
 double calculate_add(double num1, double num2){
     return num1 + num2;
 }
@@ -641,33 +640,7 @@ double calculate_log(double base, double raised){
     return log(raised)/log(base);
 }
 
-void printexpression(struct Element* list, int len){
-
-    printf("\n-----------------------------\n\n" );
-    for(int i = 0; i < len; i++) {
-        struct Element num = *(list + i);
-        if(num.type == NUMBER_REMOVE) continue;//skip
-        if(num.type == NUMBER) printf("%f", num.value);
-        else printf("%c", num.type);
-    }
-    printf("\n-----------------------------\n\n" );
-    
-}
-
-int main(){
-   
-    const char expression[] = "1+225+55.7 36 63-9+8* 9 /8 + 2^2 + 2r4 + p";
-    char* elements = trim(expression);
-    int len = strlen(elements);
-    
-    // Get Elements of the expression
-    struct Element* list = construct_elements_array(elements);
-    list = construct_numbers_from_string_of_integers(list, len);  
-    struct ElementItems data = remove_string_numbers(list, len);
-    
-    data = construct_decimal_numbers(data.elements, data.size);
-    data = convert_constant_pi(data.elements, data.size);
-    
+struct ElementItems calculate_math(struct ElementItems data){
     // calculate trigonometry
     data = calculate_1_value_expressions(data.elements, data.size, OPERATOR_SIN, FALSE, FALSE, calculate_sin);
     data = calculate_1_value_expressions(data.elements, data.size, OPERATOR_SINH, FALSE, FALSE, calculate_sinh);
@@ -692,11 +665,170 @@ int main(){
     data = calculate_2_value_expressions(data.elements, data.size, OPERATOR_MULTPILY, FALSE, FALSE, calculate_multiply);
     data = calculate_2_value_expressions(data.elements, data.size, OPERATOR_SUBSTRACT, FALSE, FALSE, calculate_substract);
     data = calculate_2_value_expressions(data.elements, data.size, OPERATOR_ADD, FALSE, FALSE, calculate_add);
-    printexpression(data.elements, data.size);
+    return data;
+}
+
+int bracket_exists(struct ElementItems data){
+    for(int i = 0; i< data.size; i++){
+        if (data.elements[i].type == BRACKET_OPEN) return TRUE;
+    }
+    return FALSE;
+}
+
+struct ElementItems calculate_innermost_brackets(struct ElementItems data, struct ElementItems(*callback_calculation)(struct ElementItems)) {
+
+    // check for brackets and get details
+    // let first_open_bracket = -1;
+    int last_open_bracket = -1;
+    int first_close_bracket = -1;
+    // let last_close_bracket = -1;
+    int count_open_bracket = 0;
+    int count_close_bracket = 0;
+
+    for(int i = 0; i< data.size; i++){
+        // count the brackets
+        if (data.elements[i].type == BRACKET_OPEN) {
+            last_open_bracket = i;
+            count_open_bracket++;
+        } else if (data.elements[i].type == BRACKET_CLOSE) {
+            count_close_bracket++;
+            if (first_close_bracket == -1) first_close_bracket = i;
+        }
+
+        // if there are more close brackets than open ones mid-count error
+        if (count_close_bracket > count_close_bracket) {
+            if(data.elements) free(data.elements);
+            struct ElementItems e;
+            e.error = "Math Syntax Error: Brackets";
+            e.size =0;
+            return e;
+        }
+
+
+        // if the count of the opening and closing brackets match (1+2)
+        // found the indices of the open and close brackets to start calcalating from
+        if (count_open_bracket == count_close_bracket && (first_close_bracket != -1)) {
+             
+            // create memeory from inner bracket expression
+            int count = (first_close_bracket - last_open_bracket) - 1;
+            struct Element *inner_expresson = (struct Element *) malloc(sizeof(struct Element) * count);
+
+            // update inner expression
+            for(int j = last_open_bracket + 1; j < first_close_bracket; j++){
+                int index = j - (last_open_bracket + 1); // so index can start at 0/
+                inner_expresson[index] = data.elements[j];
+            }
+
+            // if the inner expression is number a number 
+            // make the element on position 'last_open_bracket' the calculated number and the rest elements to remove
+            if (count == 1 && inner_expresson[0].type == NUMBER) {
+                data.elements[last_open_bracket] = inner_expresson[0];
+                for(int j = last_open_bracket + 1; j <= first_close_bracket; j++) data.elements[j].type = NUMBER_REMOVE;
+                 
+                
+                // create memory for new expression
+                int elements_to_remove = 2;
+                struct Element * new_expression = (struct Element*) malloc(sizeof(struct Element) * (data.size-elements_to_remove));
+                int k = 0;
+                for(int j = 0; j < data.size; j++){
+                    if(data.elements[j].type != NUMBER_REMOVE) new_expression[k++] = data.elements[j];
+                }
+
+                // free memory
+                if(inner_expresson) free(inner_expresson); 
+                if(data.elements) free(data.elements);
+
+                struct ElementItems e;
+                e.elements = new_expression;
+                e.size = data.size - elements_to_remove;
+                return e;
+            } else {
+                struct ElementItems e;
+                e.elements = inner_expresson;
+                e.size = count;
+                struct ElementItems calculation = callback_calculation(e);
+
+                // make the element on position of 'last_open_bracket' first position for the calculated expression and the rest elements to remove
+                int elements_to_remove = 0;
+                for(int j = last_open_bracket; j <= first_close_bracket; j++){
+                    int index = j - last_open_bracket;
+                    if(index < calculation.size) {
+                        data.elements[j] = calculation.elements[index];
+                    } else {
+                        elements_to_remove++;
+                        data.elements[j].type = NUMBER_REMOVE;
+                    }
+                }
+
+                // create memory for new expression
+                struct Element * new_expression = (struct Element*) malloc(sizeof(struct Element) * (data.size - elements_to_remove));
+                int k = 0;
+                for(int j = 0; j < data.size; j++){
+                    if(data.elements[j].type != NUMBER_REMOVE) new_expression[k++] = data.elements[j];
+                }
+
+                // free memory
+                if(inner_expresson) free(inner_expresson); 
+                if(data.elements) free(data.elements);
+
+                struct ElementItems items;
+                items.elements = new_expression;
+                items.size = data.size - elements_to_remove;
+                return items;
+            }
+        }
+
+    }
+
+    // Error on uneven brackets in expression
+    if (count_open_bracket != count_close_bracket)  {
+        struct ElementItems e;
+        e.error = "Math Syntax Error: Uneven Brackets";
+        e.size = 0;
+        return e;
+    } 
+
+    return data;
+}
+
+double calculate(const char expression[], int * error){
+
+    char* elements = trim(expression);
+    int len = strlen(elements);
     
+    // Get Elements of the expression
+    struct Element* list = construct_elements_array(elements);
+    list = construct_numbers_from_string_of_integers(list, len);  
+    struct ElementItems data = remove_string_numbers(list, len);
+
+    data = construct_decimal_numbers(data.elements, data.size);
+    data = convert_constant_pi(data.elements, data.size);
+    while(bracket_exists(data) == TRUE) data = calculate_innermost_brackets(data, calculate_math);
+    data = calculate_math(data);
+    
+     
     // free up memory
-    if(list) free(list); // free up memory
+    if(list) free(list);
     if(elements) free(elements);
+    if(data.elements) free(data.elements);
+    if(data.size == 1){
+        *error = 0;
+        return data.elements[0].value;
+    }
+    else  *error = FUNCTION_ERROR;
+    return 0;
+}
+
+int main(){
+   
+    // calculate answer
+    int error;
+    const char expression[] = "1+225+55.7 36 63-9+8* 9 /8 + 2^2 + 2r4 + p + (1+1 + (2r4) + 3)";
+    double value = calculate(expression, &error);
+
+    // print answer
+    if (error) printf("error = %d", error); 
+    else printf("answer = %f", value);
 
     return 0;
 } 

@@ -474,7 +474,7 @@ function calculate_innermost_brackets(list, callback_calculation) {
             count_open_bracket++;
         } else if (list[i] == ')') {
             count_close_bracket++;
-            if (first_close_bracket == -1) first_close_bracket = first_close_bracket = parseInt(i);
+            if (first_close_bracket == -1) first_close_bracket = parseInt(i);
         }
 
         // if there are more close brackets than open ones mid-count error
@@ -484,7 +484,6 @@ function calculate_innermost_brackets(list, callback_calculation) {
         // if the count of the opening and closing brackets match
         // found the indices of the open and close brackets to start calcalating from
         if (count_open_bracket == count_close_bracket && (first_close_bracket != -1)) {
-            bracket_expression_found = true;
             const inner_expresson = list.slice(last_open_bracket + 1, first_close_bracket);
 
             // if the inner expression is number a number 
