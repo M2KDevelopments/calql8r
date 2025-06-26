@@ -34,6 +34,9 @@
 #define PI 'p'
 #define BRACKET_OPEN '('
 #define BRACKET_CLOSE ')'
+#define FACTORIAL '!'
+#define PERMUTATIONS 'Y'
+#define COMBINATIONS 'Z'
 
 struct Element{
     double value;
@@ -640,7 +643,40 @@ double calculate_log(double base, double raised){
     return log(raised)/log(base);
 }
 
+double calcuale_factorial(double n){
+    int num = (int) n;
+    if(num <0) return 0;
+    if(num == 0) return 1;
+    if(num == 1) return 1;
+    if(num == 2) return 2;
+    int total = 1;
+    for (int n = 1; n <= num; n++) total *= num;
+    return (double) total;
+}
+
+double calculate_permulation(double n1, double r1){
+    int n = (int)n1;
+    int r = (int) r1;
+    if(n <= r) return 0;
+    return (double) calcuale_factorial(n)/calcuale_factorial(n-r);
+}
+
+double calculate_combinations(double n1, double r1){
+    int n = (int) n1;
+    int r = (int) r1;
+    if(n <= r) return 0;
+    return (double) calcuale_factorial(n)/(calcuale_factorial(r) * calcuale_factorial(n-r));
+}
+
 struct ElementItems calculate_math(struct ElementItems data){
+
+ 
+    // factorial and nPr and nCr
+    data = calculate_1_value_expressions(data.elements, data.size, FACTORIAL, FALSE, TRUE, calcuale_factorial);
+    data = calculate_2_value_expressions(data.elements, data.size, PERMUTATIONS, FALSE, TRUE, calculate_permulation);
+    data = calculate_2_value_expressions(data.elements, data.size, COMBINATIONS, FALSE, TRUE, calculate_combinations);
+    
+
     // calculate trigonometry
     data = calculate_1_value_expressions(data.elements, data.size, OPERATOR_SIN, FALSE, FALSE, calculate_sin);
     data = calculate_1_value_expressions(data.elements, data.size, OPERATOR_SINH, FALSE, FALSE, calculate_sinh);
@@ -823,7 +859,8 @@ int main(){
    
     // calculate answer
     int error;
-    const char expression[] = "1+225+55.7 36 63-9+8* 9 /8 + 2^2 + 2r4 + p + (1+1 + (2r4) + 3)";
+    // const char expression[] = "1+225+55.7 36 63-9+8* 9 /8 + 2^2 + 2r4 + p + (1+1 + (2r4) + 3)";
+    const char expression[] = "1+225+55.7";
     double value = calculate(expression, &error);
 
     // print answer
