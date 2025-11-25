@@ -30,7 +30,7 @@ My Calculate library implementation in multiple languages
 ### Constants
 <ul>
     <li>PI = p</il>
-<ul>
+</ul>
 
 
 ### Others Functions
@@ -40,7 +40,7 @@ My Calculate library implementation in multiple languages
     <li>Root = r</li>
     <li>Pol = P</li>
     <li>Rec = R</li>
-<ul>
+</ul>
 
 
 
