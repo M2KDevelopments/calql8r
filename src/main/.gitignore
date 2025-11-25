@@ -3,3 +3,6 @@
 *.class
 *.exe
 output/
+
+# Libraries
+node_modules/

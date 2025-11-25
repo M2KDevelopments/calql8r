@@ -38,6 +38,9 @@
 #define PERMUTATIONS 'Y'
 #define COMBINATIONS 'Z'
 
+#define DIRECTION_RIGHT 1
+#define DIRECTION_LEFT -1
+
 struct Element{
     double value;
     int integers;
@@ -330,7 +333,7 @@ int symbol_exists(struct Element* elements, int length, char symbol){
  * Calculate expression which require 1 numbers e.g Sin30 or 0.5 
  * Right is NOT a number it will just skip because it might be an expression. So that it can be calculate it later when the expression is calculate by other functions
  */
-struct ElementFuncProps calculate_1_value_expressions_props(char function_symbol, struct Element* elements, int len, const char* error_message){
+struct ElementFuncProps calculate_1_value_expressions_props(char function_symbol, struct Element* elements, int len, const char* error_message, int direction){
     
     for(int i = 0; i < len; i++){
         struct Element ele = *(elements + i);
@@ -347,7 +350,7 @@ struct ElementFuncProps calculate_1_value_expressions_props(char function_symbol
             }
 
             // Get left and right number
-            struct Element ele_right = elements[i+1];
+            struct Element ele_right = elements[i+direction];
 
             // Check if either left or right number is not a valid number
             if(ele_right.type == NUMBER) {
@@ -520,7 +523,7 @@ struct ElementItems calculate_1_value_expressions(struct Element* list, int leng
     
 
     while(symbol_available){
-        struct ElementFuncProps props = calculate_1_value_expressions_props(symbol_char, elements, len, "Math Error");
+        struct ElementFuncProps props = calculate_1_value_expressions_props(symbol_char, elements, len, "Math Error", DIRECTION_RIGHT);
         if (props.symbol_index == FUNCTION_ERROR){
             struct ElementItems e;
             e.size = 0;
@@ -643,36 +646,120 @@ double calculate_log(double base, double raised){
     return log(raised)/log(base);
 }
 
-double calcuale_factorial(double n){
-    int num = (int) n;
-    if(num <0) return 0;
+struct ElementItems resolve_factorial(struct Element* list, int length){
+    
+    char symbol_char = FACTORIAL;
+
+    // This item has an error
+    if(!length) {
+        // if left element and right are NOT both numbers just skip because it might be an express
+        // so we will calculate it later when the expression is calculate by other functions
+        struct ElementItems e;
+        e.elements = list;
+        e.size = length;
+        return e; 
+    } 
+    
+    // Get elements
+    struct Element* elements = list;
+    struct ElementItems data;
+    data.size = 0;
+
+
+    int len = length;
+    int symbol_available = symbol_exists(list, length, symbol_char);
+    
+
+    while(symbol_available){
+        struct ElementFuncProps props = calculate_1_value_expressions_props(symbol_char, elements, len, "Math Error", DIRECTION_LEFT);
+        if (props.symbol_index == FUNCTION_ERROR){
+            struct ElementItems e;
+            e.size = 0;
+            return e;
+        } else if(props.symbol_index == FUNCTION_OK){
+            // if left element and right are NOT both numbers just skip because it might be an express
+            // so we will calculate it later when the expression is calculate by other functions
+              struct ElementItems e;
+                e.elements = list;
+                e.size = length;
+                return e;
+        } 
+        
+        // Check for math error
+        if(props.num1 < 0){
+            struct ElementItems e;
+            e.size = 0;
+            e.error = "Math Error: Calculation on negative number";
+            return e;
+        }
+        
+        // Decimal Check
+        if(props.num1 - (int) props.num1 !=  0){
+            struct ElementItems e;
+            e.size = 0;
+            e.error = "Math Error: Calculation on decimal number for factorial";
+            return e;
+        }
+        
+        // Math calculation here
+        int total =  1;
+        if(props.num1 > 1) for (int n = 1; n <= (int) props.num1; n++) total *= n;
+       
+        // Set to remove the other nubmers
+        elements[props.symbol_index - 1].value = (double) total;
+        elements[props.symbol_index].type = NUMBER_REMOVE;
+
+        // reassign items - new memory was created here
+        if(data.size) free(data.elements);
+        struct ElementItems data = remove_string_numbers(elements, len);
+
+        // free memory - from function parameter
+        if(elements && !data.size) free(elements);
+
+        // update element
+        elements = data.elements;
+        len = data.size;
+
+        // re-check for symbol
+        symbol_available = symbol_exists(elements, len, symbol_char);
+    }
+
+    // Return Elements after calculation
+    struct ElementItems e;
+    e.elements = elements;
+    e.size = len;
+    return e;
+}
+
+
+int calculate_factorial(int num){
+    if(num < 0) return 0;
     if(num == 0) return 1;
-    if(num == 1) return 1;
-    if(num == 2) return 2;
     int total = 1;
-    for (int n = 1; n <= num; n++) total *= num;
-    return (double) total;
+    for(int n = 0; n<num; n++) total*=n;
+    return total;
 }
 
 double calculate_permulation(double n1, double r1){
     int n = (int)n1;
     int r = (int) r1;
     if(n <= r) return 0;
-    return (double) calcuale_factorial(n)/calcuale_factorial(n-r);
+    return (double) calculate_factorial(n)/calculate_factorial(n-r);
 }
+
 
 double calculate_combinations(double n1, double r1){
     int n = (int) n1;
     int r = (int) r1;
     if(n <= r) return 0;
-    return (double) calcuale_factorial(n)/(calcuale_factorial(r) * calcuale_factorial(n-r));
+    return (double) calculate_factorial(n)/(calculate_factorial(r) * calculate_factorial(n-r));
 }
 
 struct ElementItems calculate_math(struct ElementItems data){
 
  
     // factorial and nPr and nCr
-    data = calculate_1_value_expressions(data.elements, data.size, FACTORIAL, FALSE, TRUE, calcuale_factorial);
+    data = resolve_factorial(data.elements, data.size);
     data = calculate_2_value_expressions(data.elements, data.size, PERMUTATIONS, FALSE, TRUE, calculate_permulation);
     data = calculate_2_value_expressions(data.elements, data.size, COMBINATIONS, FALSE, TRUE, calculate_combinations);
     
@@ -827,6 +914,7 @@ struct ElementItems calculate_innermost_brackets(struct ElementItems data, struc
     return data;
 }
 
+
 double calculate(const char expression[], int * error){
 
     char* elements = trim(expression);
@@ -841,15 +929,20 @@ double calculate(const char expression[], int * error){
     data = convert_constant_pi(data.elements, data.size);
     while(bracket_exists(data) == TRUE) data = calculate_innermost_brackets(data, calculate_math);
     data = calculate_math(data);
+    double ans = data.elements[0].value;
+
     
      
     // free up memory
     if(list) free(list);
     if(elements) free(elements);
     if(data.elements) free(data.elements);
+
+
+    // return response
     if(data.size == 1){
         *error = 0;
-        return data.elements[0].value;
+        return ans;
     }
     else  *error = FUNCTION_ERROR;
     return 0;
@@ -859,8 +952,8 @@ int main(){
    
     // calculate answer
     int error;
-    // const char expression[] = "1+225+55.7 36 63-9+8* 9 /8 + 2^2 + 2r4 + p + (1+1 + (2r4) + 3)";
-    const char expression[] = "1+225+55.7";
+    const char expression[] = "1+225+55.7 36 63-9+8* 9 /8 + 2^2 + 2r4 + p + (1+1 + (2r4) + 3) + 6!";
+    // const char expression[] = "1+225+55.7";
     double value = calculate(expression, &error);
 
     // print answer

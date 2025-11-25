@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 /**
  Make a function one letter
  So that we can put split each char into an array
@@ -120,7 +122,7 @@ function change_string_numbers_to_integers(expression_as_array = []) {
  * @param {Array} expression_as_array 
  */
 function construct_decimal_numbers(expression_as_array = []) {
-    while (expression_as_array.includes('.')) { 
+    while (expression_as_array.includes('.')) {
 
         // check if decimal is in the wrong place
         const i = expression_as_array.indexOf('.')
@@ -128,7 +130,7 @@ function construct_decimal_numbers(expression_as_array = []) {
         const num1 = expression_as_array[i - 1]; // number before decimal
         const num2 = expression_as_array[i + 1]; // number after decimal
 
-        if(isNaN(num1) || isNaN(num2)) throw new Error('Math Error: Could not parse decimal');
+        if (isNaN(num1) || isNaN(num2)) throw new Error('Math Error: Could not parse decimal');
 
         const number = parseFloat(`${num1}.${num2}`); // e.g 134 . 1414  = 134.1414
 
@@ -514,8 +516,8 @@ function calculate(expression) {
     list = construct_decimal_numbers(list); // construct decimal numbers
 
     // replace constants
-    for(const i in list) {
-        if(list[i] == 'p') list[i] = Math.PI;
+    for (const i in list) {
+        if (list[i] == 'p') list[i] = Math.PI;
     }
 
     // recursive calcalutions until answer is found.
@@ -524,4 +526,7 @@ function calculate(expression) {
     return list[0];
 }
 
-console.log(calculate("PI"));
+
+// Entry Point for calculations
+if (process.argv.length != 3) console.warn('Invalid Math Express')
+else console.log(calculate(process.argv[2]));
