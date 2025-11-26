@@ -53,9 +53,40 @@ node src/main/main.js "1+1"
 ## Run it with Java 
 ```bash
 javac src/main/main.java 
-java src/main/Main
+java src/main/Main "1+1"
 ```
 
+## Run it with Kotlin
+```bash
+kotlinc -version
+kotlinc src/main/main.kt
+kotlin src/main/MainKt "1+1"
+```
+
+## Run it with C (gcc)
+```bash
+# Compile and run
+gcc src/main/main.c -lm -o src/main/calql8r
+./src/main/calql8r "1465+225+55.7 36 63-9+8* 9 /8 + 2^2 + 2r4 + p + (1+1 + (2r4) + 3) + 6!+789"
+```
+
+## Run it with Dart
+```bash
+# Just Run
+dart src/main/main.dart
+```
+```bash
+# Compile and run
+dart compile exe src/main/main.dart -o src/main/calql8r
+./src/main/calql8r "1+2"
+```
+
+
+## Run it with C#
+```bash
+# dotnet version 10 or above
+dotnet run src/main/Main.cs
+```
 
 ## Method of Approach for C
 I was using a ton of pointers in my initial implementation. Mallocing and Free memory like a boss but I kept getting <b>Segmentation fault</b> errors. Skill issues I know. So I'm using a different approach. I'll have an <i>arena</i> of memory that I will malloc once when the program starts and have a index to point to the end of the arena as the calculations go. Then free the entire arean of memory when the calculation is complete.

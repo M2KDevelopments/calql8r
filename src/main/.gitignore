@@ -2,7 +2,12 @@
 # Build Files
 *.class
 *.exe
+*.jar
 output/
+bin/
+dist/
+build/
+calql8r
 
 # Libraries
 node_modules/
