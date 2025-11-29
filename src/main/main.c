@@ -231,6 +231,44 @@ struct Expression convert_PI_values(struct Expression expression){
     return expression;
 }
 
+struct Expression convert_negative_numbers(struct Expression expression){
+    struct Expression expr;
+    expr.array_length = 0;
+    expr.error = CAL_OK;
+ 
+    // e.g -1+2, 2*(-1), -2*-1/2--1*(-3-2) (1-2)-13
+    for(int i = 0; i < expression.array_length; i++){
+        char c = expression.elements[i].type;
+        if(c == '-'){ //MINUS
+            // if minus at the end of a expression
+            if(i == expression.array_length-1){
+                expr.error = CAL_ERROR_SYNTAX;
+                return expr;
+            }
+
+            char next = expression.elements[i+1].type;
+            if (i == 0 && next == NUMBER){
+                expression.elements[i].type = NUMBER_REMOVE;
+                expression.elements[i+1].value *-1;
+                expression.elements[i+1].integers *-1;
+            } else if(next == '-'){ // if minus is next to another minus e.g 1 -- 1 --> 1+1
+                expression.elements[i].type = '+';
+                expression.elements[i+1].type = NUMBER_REMOVE;
+            } else if(i > 0 && expression.elements[i-1].type == BRACKET_OPEN && next == NUMBER){
+                expression.elements[i].type = NUMBER_REMOVE;
+                expression.elements[i+1].value *-1;
+                expression.elements[i+1].integers *-1;
+            } 
+        }
+    }
+
+    for(int i = 0; i < expression.array_length; i++){
+        struct Element ele = expression.elements[i];
+        if(ele.type != NUMBER_REMOVE) expr.elements[expr.array_length++] = ele;
+    }
+    return expr;
+}
+
 struct Expression calculate_2_value_expressions(struct Expression expression, char FUNCTION_SYMBOL, struct Element (*callbackFunction) (double, double)){
     struct Expression expr;
     expr.array_length = 0;
@@ -742,7 +780,7 @@ int main(int argc, char *argv[]){
 
     // calculate decimal numbers
     expr = construct_decimal_numbers(expr); 
-    
+
     // Check for Errors
     if(expr.error == CAL_ERROR_MATH) {
         printf("Math Error");
@@ -755,8 +793,10 @@ int main(int argc, char *argv[]){
         return EXIT_FAILURE;
     }
 
+    // replace all constants of pi
     expr = convert_PI_values(expr); 
 
+    
     // Check for Errors
     if(expr.error == CAL_ERROR_MATH) {
         printf("Math Error");
@@ -769,14 +809,23 @@ int main(int argc, char *argv[]){
         return EXIT_FAILURE;
     }
 
-    //show answer
-    printf("\n\n");
-    for(int i =0; i < expr.array_length; i++) {
-        if(expr.elements[i].type == NUMBER) printf("%lf", expr.elements[i].value);
-        else printf("%c", expr.elements[i].type);
+    // convert negative numbers and double negatives into positive
+    expr = convert_negative_numbers(expr); 
+
+    
+    // Check for Errors
+    if(expr.error == CAL_ERROR_MATH) {
+        printf("Math Error");
+        return EXIT_FAILURE;
+    }
+    
+    // Check for Errors
+    if(expr.error == CAL_ERROR_SYNTAX) {
+        printf("Syntax Error");
+        return EXIT_FAILURE;
     }
 
-     
+    
     // Calculate inner most bracket expression again and again
     int brackets_exists = 0;
     do{
