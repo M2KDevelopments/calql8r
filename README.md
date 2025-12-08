@@ -73,24 +73,24 @@ gcc src/main/main.c -lm -o src/main/calql8r
 ## Run it with Dart
 ```bash
 # Just Run
-dart src/main/main.dart
+dart src/main/main.dart 1 + 1
 ```
 ```bash
 # Compile and run
 dart compile exe src/main/main.dart -o src/main/calql8r
-./src/main/calql8r "1+2"
+./src/main/calql8r "1+1"
 ```
 
 
 ## Run it with C#
 ```bash
 # dotnet version 10 or above
-dotnet run src/main/Main.cs
+dotnet run src/main/Main.cs 1+1
 ```
 
 ## Run it with Python
 ```bash
-python src/main/main.py 1+1
+python src/main/main.py 1 + 1
 ```
 
 ## Method of Approach for C
