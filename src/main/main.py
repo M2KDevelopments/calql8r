@@ -86,11 +86,11 @@ def construct_decimal_numbers(expression: list):
 def convert_negative_numbers(expression: list):
     # e.g -1+2, 2*(-1), -2*-1/2--1*(-3-2) (1-2)-13
     for i in range(0, len(expression)):
-        if expression[i] == '-':
+        if expression[i] == OPERATOR_SUBSTRACT:
             if i == len(expression) - 1:  # boundary check for minus
                 return None
-            if (expression[i+1] == '-'):  # double negative
-                expression[i] = '+'
+            if (expression[i+1] == OPERATOR_SUBSTRACT):  # double negative
+                expression[i] = OPERATOR_ADD
                 expression[i+1] = ''
             elif i == 0 and isinstance(expression[i+1], numbers.Number):
                 expression[i] = ''
@@ -232,7 +232,7 @@ def calculate_math(expression:list) -> numbers.Number:
 
         
         # calculate exponents and roots    
-        expression =  calculate_2_value_expressions(expression, OPERATOR_POW, lambda a, b: math.pow(b, a))
+        expression =  calculate_2_value_expressions(expression, OPERATOR_POW, lambda base, exp: math.pow(base, exp))
         if(expression == None) : 
             return None
         
@@ -270,7 +270,7 @@ def calculate_math(expression:list) -> numbers.Number:
         return None
 
 
-def calculate_innermost_brackets(expression:list):
+def calculate_innermost_brackets(expression:list, calculate_math: Callable[[list], numbers.Number]= calculate_math) -> list:
     last_open_bracket = -1
     first_close_bracket = -1
     count_open_bracket = 0
@@ -295,6 +295,9 @@ def calculate_innermost_brackets(expression:list):
             bracket_expression = expression[last_open_bracket +
                                             1: first_close_bracket]
             value = calculate_math(bracket_expression)
+            if value == None:
+                return None
+            
             expression[last_open_bracket] = value
 
             # remove all elements from last_open_bracket to first_close_bracket
@@ -310,7 +313,7 @@ def calculate_innermost_brackets(expression:list):
 def main():
 
 
-    if len(sys.argv) < 2:
+    if len(sys.argv) < 1:
         return print("PLEASE ADD AN EXPRESSION TO CALCULATE")
 
 
@@ -348,7 +351,7 @@ def main():
     
     # Calculate inner bracket expressions
     while expression.count('('):
-        expression = calculate_innermost_brackets(expression)
+        expression = calculate_innermost_brackets(expression, calculate_math)
         if (expression == None):
             return print("MATH ERROR")
     
