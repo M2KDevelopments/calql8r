@@ -224,7 +224,7 @@ struct Expression convert_PI_values(struct Expression expression){
         if(expression.elements[i].type == PI){
             expression.elements[i].type = NUMBER;
             expression.elements[i].integers = 3;
-            expression.elements[i].value = 4.0 * atan(1.0);
+            expression.elements[i].value = M_PI; // M_PI is from <math.h> e.g 4.0 * atan(1.0);
             expression.elements->digit_length = 1;
         }
     }
@@ -349,7 +349,6 @@ struct Expression calculate_1_value_expression(struct Expression expression, cha
                 // calculate the value
                 struct Element ele = callbackFunction(prev.value);
 
-
                 if(ele.type == CAL_ELEMENT_ERROR){
                     expr.error = CAL_ERROR_SYNTAX;
                     return expr;
@@ -363,7 +362,7 @@ struct Expression calculate_1_value_expression(struct Expression expression, cha
                     return expr;
                 }
 
-                // calculate the value
+                // calculate the value 
                 struct Element ele = callbackFunction(next.value);
 
 
@@ -560,7 +559,7 @@ int resolve_factorial(int num){
     if(num < 0) return 0;
     if(num == 0) return 1;
     int total = 1;
-    for(int n = 0; n<num; n++) total*=n;
+    for(int n = 1; n <= num; n++) total*=n;
     return total;
 }
 
@@ -600,7 +599,6 @@ struct Element calculate_combinations(double n1, double r1){
 }
 
 struct Element calculate_factorial(double num){
- 
     struct Element e;
     if(num < 0) {
         e.type = CAL_ELEMENT_ERROR;
@@ -609,7 +607,7 @@ struct Element calculate_factorial(double num){
         return e;
     }
     double value =  resolve_factorial(num);
-    e.integers =(int) value;
+    e.integers = (int) value;
     e.value = value;
     e.type = NUMBER;
     return e;
@@ -621,11 +619,10 @@ struct Expression calculate_math(struct Expression expression){
     expr.array_length = 0;
     expr.error = CAL_OK; 
 
-
     // factorial and nPr and nCr 
     expr = calculate_1_value_expression(expression, OPERATOR_FACTORIAL, FUNCTION_DIRECTION_LEFT, calculate_factorial);
     if(expr.error != CAL_OK) return expr;
-    
+ 
     expr = calculate_2_value_expressions(expr, PERMUTATIONS, calculate_permutation);
     if(expr.error != CAL_OK) return expr;
     
@@ -758,17 +755,31 @@ struct Expression calculate_innermost_brackets(struct Expression expression){
         }
 
     }
-    return expr;
+
+    return expression;
 }
 
 int main(int argc, char *argv[]){
-  
-    char expression[] = "1465+225+55.7 36 63-9+8* 9 /8 + 2^2 + 2r4 + p + (1+1 + (2r4) + 3) + 6!+789";
+ 
+    if(argc < 2){
+        printf("PLEASE ADD AN EXPRESSION TO CALCULATE");
+        return EXIT_FAILURE;
+    }
+
+    // example
+    // char expression[] = "1465+225+55.7 36 63-9+8* 9 /8 + 2^2 + 2r4 + p + (1+1 + (2r4) + 3) + 6!+789";
+    char expression[ARRAY_MAX_SIZE];
+    int count = 0;
+    for(int i = 1; i < argc; i++) {
+        for(int j =0; j < strlen(argv[i]); j++) {
+            expression[count++] = argv[i][j];
+        }
+    }
     
     // BUFFER SIZE CHECK
     int num_of_characters = strlen(expression);
     if(num_of_characters >= ARRAY_MAX_SIZE) {
-        printf("%d is TOO MANY VALUES", num_of_characters);
+        printf("%f is TOO MANY VALUES", num_of_characters);
         return EXIT_FAILURE;
     }
 
@@ -780,6 +791,8 @@ int main(int argc, char *argv[]){
 
     // calculate decimal numbers
     expr = construct_decimal_numbers(expr); 
+
+   
 
     // Check for Errors
     if(expr.error == CAL_ERROR_MATH) {
@@ -796,7 +809,7 @@ int main(int argc, char *argv[]){
     // replace all constants of pi
     expr = convert_PI_values(expr); 
 
-    
+   
     // Check for Errors
     if(expr.error == CAL_ERROR_MATH) {
         printf("Math Error");
@@ -829,6 +842,7 @@ int main(int argc, char *argv[]){
     // Calculate inner most bracket expression again and again
     int brackets_exists = 0;
     do{
+
         // calculations
         expr = calculate_innermost_brackets(expr);
 
@@ -846,7 +860,7 @@ int main(int argc, char *argv[]){
 
         // Check for brackets again
         brackets_exists = 0;
-        for(int i =0; i < expr.array_length; i++) {
+        for (int i = 0; i < expr.array_length; i++) {
             if(expr.elements[i].type == BRACKET_OPEN) {
                 brackets_exists = 1; 
                 break;
