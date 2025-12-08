@@ -761,7 +761,7 @@ struct Expression calculate_innermost_brackets(struct Expression expression){
 
 int main(int argc, char *argv[]){
  
-    if(argc < 2){
+    if(argc < 1){
         printf("PLEASE ADD AN EXPRESSION TO CALCULATE");
         return EXIT_FAILURE;
     }
