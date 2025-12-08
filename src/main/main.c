@@ -38,8 +38,8 @@
 #define PERMUTATIONS 'Y'
 #define COMBINATIONS 'Z'
 
-#define FUNCTION_DIRECTION_RIGHT 1
-#define FUNCTION_DIRECTION_LEFT -1
+#define FUNCTION_VALUE_DIRECTION_RIGHT 1
+#define FUNCTION_VALUE_DIRECTION_LEFT -1
 
 #define CAL_ELEMENT_ERROR '_'
 #define CAL_OK 0
@@ -334,12 +334,12 @@ struct Expression calculate_1_value_expression(struct Expression expression, cha
         char c = expression.elements[i].type;
         if(c == FUNCTION_SYMBOL){
             // if the decimal is on the first or last position
-            if((i == 0 && function_value_direction == FUNCTION_DIRECTION_LEFT) || ((i == (expression.array_length-1)) && function_value_direction == FUNCTION_DIRECTION_RIGHT)){
+            if((i == 0 && function_value_direction == FUNCTION_VALUE_DIRECTION_LEFT) || ((i == (expression.array_length-1)) && function_value_direction == FUNCTION_VALUE_DIRECTION_RIGHT)){
                 expr.error = CAL_ERROR_SYNTAX;
                 return expr;
             }            
 
-            if (function_value_direction == FUNCTION_DIRECTION_LEFT){
+            if (function_value_direction == FUNCTION_VALUE_DIRECTION_LEFT){
                 struct Element prev = expression.elements[i-1];
                 if (prev.type != NUMBER){
                     expr.error = CAL_ERROR_SYNTAX;
@@ -355,7 +355,7 @@ struct Expression calculate_1_value_expression(struct Expression expression, cha
                 }
                 expression.elements[i-1] = ele;
                 expression.elements[i].type = NUMBER_REMOVE;
-            } else if (function_value_direction == FUNCTION_DIRECTION_RIGHT){
+            } else if (function_value_direction == FUNCTION_VALUE_DIRECTION_RIGHT){
                 struct Element next = expression.elements[i+1];
                 if (next.type != NUMBER){
                     expr.error = CAL_ERROR_SYNTAX;
@@ -620,7 +620,7 @@ struct Expression calculate_math(struct Expression expression){
     expr.error = CAL_OK; 
 
     // factorial and nPr and nCr 
-    expr = calculate_1_value_expression(expression, OPERATOR_FACTORIAL, FUNCTION_DIRECTION_LEFT, calculate_factorial);
+    expr = calculate_1_value_expression(expression, OPERATOR_FACTORIAL, FUNCTION_VALUE_DIRECTION_LEFT, calculate_factorial);
     if(expr.error != CAL_OK) return expr;
  
     expr = calculate_2_value_expressions(expr, PERMUTATIONS, calculate_permutation);
@@ -632,30 +632,30 @@ struct Expression calculate_math(struct Expression expression){
 
     // calculate trigonometry
     
-    expr = calculate_1_value_expression(expr, OPERATOR_SIN, FUNCTION_DIRECTION_RIGHT, calculate_sin);
+    expr = calculate_1_value_expression(expr, OPERATOR_SIN, FUNCTION_VALUE_DIRECTION_RIGHT, calculate_sin);
     if(expr.error != CAL_OK) return expr;
     
-    expr = calculate_1_value_expression(expr, OPERATOR_SINH, FUNCTION_DIRECTION_RIGHT, calculate_sinh);
+    expr = calculate_1_value_expression(expr, OPERATOR_SINH, FUNCTION_VALUE_DIRECTION_RIGHT, calculate_sinh);
     if(expr.error != CAL_OK) return expr;
     
-    expr = calculate_1_value_expression(expr, OPERATOR_COS, FUNCTION_DIRECTION_RIGHT, calculate_cos);
+    expr = calculate_1_value_expression(expr, OPERATOR_COS, FUNCTION_VALUE_DIRECTION_RIGHT, calculate_cos);
     if(expr.error != CAL_OK) return expr;
     
-    expr = calculate_1_value_expression(expr, OPERATOR_COSH, FUNCTION_DIRECTION_RIGHT, calculate_cosh);
+    expr = calculate_1_value_expression(expr, OPERATOR_COSH, FUNCTION_VALUE_DIRECTION_RIGHT, calculate_cosh);
     if(expr.error != CAL_OK) return expr;
     
-    expr = calculate_1_value_expression(expr, OPERATOR_TAN, FUNCTION_DIRECTION_RIGHT, calculate_tan);
+    expr = calculate_1_value_expression(expr, OPERATOR_TAN, FUNCTION_VALUE_DIRECTION_RIGHT, calculate_tan);
     if(expr.error != CAL_OK) return expr;
     
-    expr = calculate_1_value_expression(expr, OPERATOR_TANH, FUNCTION_DIRECTION_RIGHT, calculate_tanh);
+    expr = calculate_1_value_expression(expr, OPERATOR_TANH, FUNCTION_VALUE_DIRECTION_RIGHT, calculate_tanh);
     if(expr.error != CAL_OK) return expr;
 
     
     // calulate logarithms
-    expr = calculate_1_value_expression(expr, OPERATOR_LOG10, FUNCTION_DIRECTION_RIGHT, calculate_log10);
+    expr = calculate_1_value_expression(expr, OPERATOR_LOG10, FUNCTION_VALUE_DIRECTION_RIGHT, calculate_log10);
     if(expr.error != CAL_OK) return expr;
     
-    expr = calculate_1_value_expression(expr, OPERATOR_LN, FUNCTION_DIRECTION_RIGHT, calculate_ln);
+    expr = calculate_1_value_expression(expr, OPERATOR_LN, FUNCTION_VALUE_DIRECTION_RIGHT, calculate_ln);
     if(expr.error != CAL_OK) return expr;
     
     expr = calculate_2_value_expressions(expr, OPERATOR_LOGx, calculate_log);
@@ -786,7 +786,7 @@ int main(int argc, char *argv[]){
     char* trimmed_expression = trim_whitespaces(expression);
     struct Expression expr = construct_numbers_from_string_of_integers(trimmed_expression); 
 
-     // free memory of trimmed expression
+    // free memory of trimmed expression
     free(trimmed_expression);
 
     // calculate decimal numbers
