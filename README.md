@@ -52,7 +52,7 @@ node src/main/main.js "1+1"
 
 ## Run it with Java 
 ```bash
-javac src/main/main.java 
+javac src/main/Main.java 
 java src/main/Main "1+1"
 ```
 
