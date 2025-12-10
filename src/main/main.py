@@ -217,7 +217,7 @@ def calculate_math(expression:list) -> numbers.Number:
             return None
 
         
-        # calulate logarithms
+        # calculate logarithms
         expression =  calculate_1_value_expression(expression, OPERATOR_LOG10, FUNCTION_VALUE_DIRECTION_RIGHT, lambda num: math.log10(num))
         if(expression == None) : 
             return None

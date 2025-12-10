@@ -425,7 +425,7 @@ function math_calculation(list) {
     list = calculate_tan(list);
     list = calculate_tanh(list);
 
-    // calulate logarithms
+    // calculate logarithms
     list = calculate_log10(list);
     list = calculate_ln(list);
     list = calculate_log(list);

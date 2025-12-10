@@ -248,7 +248,7 @@ double? calculate_math(List<dynamic> expr) {
         EnumFunctionValueDirection.RIGHT, (number) => atan(number));
     if (expression == null) return null;
 
-    // calulate logarithms
+    // calculate logarithms
     expression = calculate_1_value_expression(expression, OPERATOR_LOG10,
         EnumFunctionValueDirection.RIGHT, (number) => log(number) / log(10));
     if (expression == null) return null;

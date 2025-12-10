@@ -651,7 +651,7 @@ struct Expression calculate_math(struct Expression expression){
     if(expr.error != CAL_OK) return expr;
 
     
-    // calulate logarithms
+    // calculate logarithms
     expr = calculate_1_value_expression(expr, OPERATOR_LOG10, FUNCTION_VALUE_DIRECTION_RIGHT, calculate_log10);
     if(expr.error != CAL_OK) return expr;
     

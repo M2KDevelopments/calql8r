@@ -291,7 +291,7 @@ class CalQl8r
             expression = Calculate1ValueExpression(expression, CalQl8r.OPERATOR_TANH, EnumFunctionValueDirection.RIGHT, (number) => Math.Tanh(number));
             if (expression == null) return null;
 
-            // calulate logarithms
+            // calculate logarithms
             expression = Calculate1ValueExpression(expression, CalQl8r.OPERATOR_LOG10, EnumFunctionValueDirection.RIGHT, (number) => Math.Log(number) / Math.Log(10));
             if (expression == null) return null;
 

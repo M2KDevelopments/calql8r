@@ -243,7 +243,7 @@ public class Main {
             expression = calculate_1_value_expression(expression, OPERATOR_TANH, EnumFunctionValueDirection.RIGHT, Math::tanh);
             if (expression == ERROR) return Double.MIN_VALUE;
 
-            // calulate logarithms
+            // calculate logarithms
             expression = calculate_1_value_expression(expression, OPERATOR_LOG10, EnumFunctionValueDirection.RIGHT, (number) -> Math.log(number) / Math.log(10));
             if (expression == ERROR) return Double.MIN_VALUE;
 
