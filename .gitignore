@@ -3,6 +3,8 @@
 *.class
 *.exe
 *.jar
+*.txt
+*.csv
 output/
 bin/
 dist/

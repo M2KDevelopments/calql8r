@@ -530,5 +530,5 @@ function calculate(expression) {
 
 
 // Entry Point for calculations
-if (process.argv.length != 3) console.warn('Invalid Math Express')
+if (process.argv.length != 3) console.warn('Invalid Math Expression')
 else console.log(calculate(process.argv[2]));
