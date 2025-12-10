@@ -148,11 +148,6 @@ dotnet run src/main/Main.cs 1+1
 python src/main/main.py 1 + 1
 ```
 
-## Method of Approach for C
-I was using a ton of pointers in my initial implementation. Mallocing and Free memory like a boss but I kept getting <b>Segmentation fault</b> errors. Skill issues I know. So I'm using a different approach. I'll have an <i>arena</i> of memory that I will malloc once when the program starts and have a index to point to the end of the arena as the calculations go. Then free the entire arean of memory when the calculation is complete.
-
-
-
 ## Support
 You can support us with any amount. It's all appreciated.
 
