@@ -1,534 +1,327 @@
-#!/usr/bin/env node
+/**
+ * CLI Calculator Program (Node.js)
+ * Implements the Shunting-Yard Algorithm to convert infix expressions to RPN 
+ * and then evaluates the RPN using a stack.
+ */
+
+// --- 1. Operator and Function Definitions ---
+
+// Define function types for clarity (although JS uses generic functions)
+// type BinaryFunction = (a, b) => number;
+// type UnaryFunction = (a) => number;
 
 /**
- Make a function one letter
- So that we can put split each char into an array
-
-        ---------------------
-        // Sin - S
-        // SinH - s
-        // Cos - C
-        // CosH - c
-        // Tan - T
-        // Tanh - h
-        // EXP or E - ^
-        // SQRT - 2r
-        // CBRT - 3r
-        // RT - r
-        // Ln - l
-        // Log - L
-        // Pol( - P
-        // Rec( - R
-        // PI = 3.142...
-         ---------------------
- * @param {string} expression 
- * @returns 
+ * Represents an operator or function with its properties for the Shunting-Yard algorithm.
  */
-function change_expression_to_array(expression) {
-    expression = expression.replace(/\s/gmi, '')
-    expression = expression.replace(/sinh/gmi, 's')
-    expression = expression.replace(/cosh/gmi, 'c')
-    expression = expression.replace(/tanh/gmi, 't')
-    expression = expression.replace(/sin/gmi, 'S')
-    expression = expression.replace(/cos/gmi, 'C')
-    expression = expression.replace(/tan/gmi, 'T')
-    expression = expression.replace(/EXP/gmi, '*10^')
-    expression = expression.replace(/SQRT/gmi, '2r')
-    expression = expression.replace(/CBRT/gmi, '3r')
-    expression = expression.replace(/RT/gmi, 'r')
-    expression = expression.replace(/Ln/gmi, 'E')
-    expression = expression.replace(/Logx/gmi, 'l')
-    expression = expression.replace(/Log/gmi, 'L')
-    expression = expression.replace(/Pol/gmi, 'P')
-    expression = expression.replace(/Rec/gmi, 'R')
-    expression = expression.replace(/X/gmi, '*')
-    expression = expression.replace(/PI/gmi, 'p')
-
-    // Turn string expression into array - 13.25 * 2 = ['1', '3', '.', '2', '5', '*', '2'];
-    return expression.split('');
+class OpFuncDef {
+    constructor(name, precedence, isLeftAssociative, arity, func) {
+        this.name = name;
+        this.precedence = precedence;
+        this.isLeftAssociative = isLeftAssociative;
+        this.arity = arity;
+        this.func = func; // The actual JavaScript function
+    }
 }
 
+// Global static map for all known operators and functions
+const DEFINITIONS = new Map();
+
+// --- 2. Function Implementations ---
+
+// Custom Root: a r b means b-th root of a. (Root degree is b)
+const root = (a, b) => {
+    if (a < 0 && Math.abs(b % 2) < 1e-9) // Check if b is an even integer
+        throw new Error("Cannot take even root of a negative number.");
+    return Math.pow(a, 1.0 / b);
+};
+
+// Unary Post-fix Factorial
+const factorial = (a) => {
+    if (a < 0 || Math.abs(a % 1) > 1e-9)
+        throw new Error("Factorial only defined for non-negative integers.");
+    if (a === 0) return 1;
+    
+    let res = 1;
+    for (let i = 1; i <= a; i++) {
+        res *= i;
+    }
+    return res;
+};
+
+// --- 3. Static Initialization ---
+
+function initializeDefinitions() {
+    if (DEFINITIONS.size > 0) return;
+
+    // Precedence: Higher number binds tighter
+    
+    // Postfix Unary (Highest Precedence)
+    DEFINITIONS.set("!", new OpFuncDef("!", 6, true, 1, factorial)); 
+
+    // Prefix Unary Functions (Right Associative precedence 5)
+    DEFINITIONS.set("S", new OpFuncDef("S", 5, false, 1, Math.sin));
+    DEFINITIONS.set("s", new OpFuncDef("s", 5, false, 1, Math.sinh));
+    DEFINITIONS.set("C", new OpFuncDef("C", 5, false, 1, Math.cos));
+    DEFINITIONS.set("c", new OpFuncDef("c", 5, false, 1, Math.cosh));
+    DEFINITIONS.set("T", new OpFuncDef("T", 5, false, 1, Math.tan));
+    DEFINITIONS.set("t", new OpFuncDef("t", 5, false, 1, Math.tanh));
+    DEFINITIONS.set("l", new OpFuncDef("l", 5, false, 1, Math.log));    // Ln (Natural Log)
+    DEFINITIONS.set("L", new OpFuncDef("L", 5, false, 1, Math.log10)); // Log10
+
+    // Binary Operators
+    DEFINITIONS.set("^", new OpFuncDef("^", 4, false, 2, Math.pow)); // Right Associative
+    DEFINITIONS.set("r", new OpFuncDef("r", 4, true, 2, root));       // Left Associative
+
+    DEFINITIONS.set("*", new OpFuncDef("*", 3, true, 2, (a, b) => a * b));
+    DEFINITIONS.set("/", new OpFuncDef("/", 3, true, 2, (a, b) => a / b));
+    
+    DEFINITIONS.set("+", new OpFuncDef("+", 2, true, 2, (a, b) => a + b));
+    // Internal token '_' for binary subtraction, distinguishing it from unary minus.
+    DEFINITIONS.set("_", new OpFuncDef("-", 2, true, 2, (a, b) => a - b)); 
+}
+
+// --- 4. Lexer/Tokenizer ---
+
 /**
- * Convert the string numbers in an array in integers e.g ['1', '2', '.', '2', '4'] = [12, '.', '24']
- * @param {Array<string>} expression_as_array 
+ * Converts the raw input string into a list of tokens, handling unary minus.
  */
-function change_string_numbers_to_integers(expression_as_array = []) {
-    const numberSet = new Set(['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']);
-    while (expression_as_array.includes('0') || expression_as_array.includes('1') || expression_as_array.includes('2') || expression_as_array.includes('3') || expression_as_array.includes('4') || expression_as_array.includes('5') || expression_as_array.includes('6') || expression_as_array.includes('7') || expression_as_array.includes('8') || expression_as_array.includes('9')) {
-        let start = -1;
+function tokenize(expression) {
+    // 1. Preprocess: Insert spaces around tokens for easier splitting
+    let processed = expression.replace(/\s+/g, ""); // Remove existing spaces
 
-        let number = 0;
-        for (let i in expression_as_array) {
-            const ch = expression_as_array[i];
-            if (numberSet.has(ch)) {
-                if (start == -1) start = parseInt(i);
-
-                // if the number is the last element
-                if (start != -1 && i == expression_as_array.length - 1) {
-                    const num = expression_as_array.slice(start).join("") // join the trailing numbers
-                    expression_as_array.splice(start);
-                    expression_as_array.push(parseInt(num));
-                }
-            } else {
-
-                // skip if a number has not been found yet
-                if (start == -1) continue;
-
-                // calculate the number
-                const end = parseInt(i);
-                let multipler = 1;
-                for (let j = end - 1; j >= start; j--) {
-                    number += parseInt(expression_as_array[j]) * multipler;
-                    multipler *= 10;
-                }
-
-
-                // replace the string numbers with a integer number
-                const count = end - start;
-                if (start == 0) {
-                    expression_as_array.unshift(number);
-                    expression_as_array.splice(1, count);
-                } else if (start == (end - 1)) {
-                    // just one number
-                    expression_as_array[start] = parseInt(expression_as_array[start]);
-                } else {
-                    // split the array at the point of the first part of the number
-                    const part1 = expression_as_array.slice(0, start)
-                    const part2 = expression_as_array.slice(start);
-
-                    // remove the calculated number
-                    part2.splice(0, count);
-
-                    // update array expression inserting the calculated whole number
-                    expression_as_array = [...part1, number, ...part2];
-                }
-
-                // reset start position
-                start = -1;
-                break;
-
-            }
-
-
-        }
-
+    const separators = ["(", ")", "+", "*", "/", "^", "!", "r", "S", "s", "C", "c", "T", "t", "l", "L", "p"];
+    for (const sep of separators) {
+        processed = processed.replaceAll(sep, ` ${sep} `);
     }
 
-    return expression_as_array;
+    // Separate minus sign, which is handled specially
+    processed = processed.replaceAll("-", " - ");
+
+    // Clean up multiple spaces and split
+    const tokens = processed.split(/\s+/).filter(t => t.length > 0);
+
+    // 2. Handle Unary Minus vs. Binary Minus
+    const resultTokens = [];
+    
+    for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i];
+        
+        if (token === "-") {
+            // Check if the preceding token is an operand (number, constant, '!', or ')')
+            const lastResultToken = resultTokens[resultTokens.length - 1];
+            const isPrecedingTokenOperand = resultTokens.length > 0 && 
+                (!isNaN(parseFloat(lastResultToken)) || lastResultToken === "!" || lastResultToken === ")" || lastResultToken === "p");
+            
+            if (i === 0 || !isPrecedingTokenOperand) {
+                // Unary Minus: Merge it with the next token (e.g., "-5")
+                if (i + 1 < tokens.length) {
+                    tokens[i + 1] = token + tokens[i + 1];
+                }
+                // Skip the current token as it's merged into the next
+            } else {
+                // Binary Minus: Use the internal token '_'
+                resultTokens.push("_");
+            }
+        } else {
+            resultTokens.push(token);
+        }
+    }
+    return resultTokens;
 }
 
+function isNumberOrConstant(s) {
+    if (s === "p") return true;
+    return !isNaN(parseFloat(s));
+}
+
+// --- 5. Shunting-Yard Algorithm (Infix to RPN) ---
+
 /**
- * Convert the numbers around the decimal point into decimal numbers e.g [12, '.', '24'] = [12.24]
- * @param {Array} expression_as_array 
+ * Converts a list of infix tokens to a list of RPN tokens using Shunting-Yard.
  */
-function construct_decimal_numbers(expression_as_array = []) {
-    while (expression_as_array.includes('.')) {
+function infixToRpn(infixTokens) {
+    const outputQueue = [];
+    const operatorStack = [];
+    
+    for (const token of infixTokens) {
+        // 1. Number or constant 'p'
+        if (isNumberOrConstant(token)) {
+            outputQueue.push(token);
+        }
+        // 2. Function or prefix unary operator (not '!')
+        else if ((DEFINITIONS.has(token) && DEFINITIONS.get(token).arity === 1 && token !== "!") || token === "(") {
+            operatorStack.push(token);
+        }
+        // 3. Binary operator ('_' is binary subtraction)
+        else if (DEFINITIONS.has(token) && DEFINITIONS.get(token).arity === 2) {
+            const currentDef = DEFINITIONS.get(token);
+            
+            while (operatorStack.length > 0) {
+                const topToken = operatorStack[operatorStack.length - 1];
+                if (topToken === "(") break;
 
-        // check if decimal is in the wrong place
-        const i = expression_as_array.indexOf('.')
-        if ((i - 1 < 0) || (i + 1 > expression_as_array.length - 1)) throw new Error('Math Error: Could not parse decimal');
-        const num1 = expression_as_array[i - 1]; // number before decimal
-        const num2 = expression_as_array[i + 1]; // number after decimal
+                const topDef = DEFINITIONS.get(topToken);
+                if (!topDef) break; 
+                
+                // Check precedence and associativity
+                const isHigherPrecedence = currentDef.precedence < topDef.precedence;
+                const isSamePrecedenceLeftAssoc = currentDef.precedence === topDef.precedence && currentDef.isLeftAssociative;
 
-        if (isNaN(num1) || isNaN(num2)) throw new Error('Math Error: Could not parse decimal');
-
-        const number = parseFloat(`${num1}.${num2}`); // e.g 134 . 1414  = 134.1414
-
-        if (i == 0) {
-            expression_as_array.unshift(number);
-            expression_as_array.splice(1, 3);
+                if (isHigherPrecedence || isSamePrecedenceLeftAssoc) {
+                    outputQueue.push(operatorStack.pop());
+                } else {
+                    break;
+                }
+            }
+            operatorStack.push(token);
+        }
+        // 4. Postfix operator '!'
+        else if (token === "!") {
+             outputQueue.push(token);
+        }
+        // 5. If the token is ')'
+        else if (token === ")") {
+            while (operatorStack.length > 0 && operatorStack[operatorStack.length - 1] !== "(") {
+                outputQueue.push(operatorStack.pop());
+            }
+            if (operatorStack.length === 0)
+                throw new Error("Mismatched parentheses in expression: missing '('");
+            
+            operatorStack.pop(); // Pop the '('
+            
+            // Pop function if one is above '('
+            if (operatorStack.length > 0 && DEFINITIONS.has(operatorStack[operatorStack.length - 1])) {
+                outputQueue.push(operatorStack.pop());
+            }
         }
         else {
-
-            // split the array at the point of the first part of the decimal
-            const prev = i - 1;
-            const part1 = expression_as_array.slice(0, prev)
-            const part2 = expression_as_array.slice(prev);
-
-            // remove the calculated number
-            part2.splice(0, 3);
-
-            // update array expression inserting the calculated decimal number
-            expression_as_array = [...part1, number, ...part2];
+            throw new Error(`Invalid token found during parsing: ${token}`);
         }
-
     }
-    return expression_as_array;
+
+    // 6. Pop remaining operators
+    while (operatorStack.length > 0) {
+        const token = operatorStack.pop();
+        if (token === "(")
+            throw new Error("Mismatched parentheses in expression: missing ')'");
+        
+        outputQueue.push(token);
+    }
+    
+    return outputQueue;
 }
 
+// --- 6. RPN Evaluation ---
+
 /**
- * Calculate expression which require 2 numbers e.g 5*5 or 5+2 or 3^4 
- * if the right is NOT a number just skip because it might be an expression. So that it can be calculate it later when the expression is calculate by other functions
- * @param {string} function_symbol 
- * @param {Array} expression_as_array 
- * @param {string} errorMessage 
+ * Evaluates a list of RPN tokens.
  */
-function calculate_1_value_expressions(function_symbol, expression_as_array, errorMessage, calculateCallback) {
+function evaluateRpn(rpnTokens) {
+    const valueStack = [];
 
-    let start = 0;
-    while (expression_as_array.includes(function_symbol, start)) {
-        const index = expression_as_array.indexOf(function_symbol, start);
-        if (index == expression_as_array.length - 1) return new Error(errorMessage);
-        start = index + 1;
-
-        // left side is base and right side is exponent
-        const num = expression_as_array[index + 1];
-
-        // check if the left and right side elements are both numbers
-        if (typeof num == 'number') {
-            const number = calculateCallback(num);
-            if (index == 0) {
-                expression_as_array.unshift(number);
-                expression_as_array.splice(1, 3);
+    for (const token of rpnTokens) {
+        // 1. Number or 'p'
+        if (isNumberOrConstant(token)) {
+            if (token === "p") {
+                valueStack.push(Math.PI);
             } else {
-                const part1 = expression_as_array.slice(0, index);
-                const part2 = expression_as_array.slice(index);
-                part2.splice(0, 2);
-                expression_as_array = [...part1, number, ...part2];
+                valueStack.push(parseFloat(token));
             }
         }
-        // if the right is NOT a number just skip because it might be an expression
-        // so we will calculate it later when the expression is calculate by other functions
-
-    }
-
-    return expression_as_array;
-}
-
-/**
- * Calculate expression which require 2 numbers e.g 5*5 or 5+2 or 3^4 
- * if left element and right are NOT both numbers it will just skip because it might be an expression. So that it can be calculate it later when the expression is calculate by other functions
- * @param {string} function_symbol 
- * @param {Array} expression_as_array 
- * @param {string} errorMessage 
- */
-function calculate_2_value_expressions(function_symbol, expression_as_array, errorMessage, calculateCallback) {
-
-    let start = 0;
-    while (expression_as_array.includes(function_symbol, start)) {
-        const index = expression_as_array.indexOf(function_symbol, start);
-        if (index == 0) return new Error(errorMessage);
-        if (index == expression_as_array.length - 1) return new Error(errorMessage);
-        start = index + 1;
-
-        // left side is base and right side is exponent
-        const left = expression_as_array[index - 1];
-        const right = expression_as_array[index + 1];
-
-        // check if the left and right side elements are both numbers
-        if (typeof left == 'number' && typeof right == 'number') {
-            const number = calculateCallback(left, right);
-            const prev = index - 1;
-            if (prev == 0) {
-                expression_as_array.unshift(number);
-                expression_as_array.splice(1, 3);
-            } else {
-                const part1 = expression_as_array.slice(0, prev);
-                const part2 = expression_as_array.slice(prev);
-                part2.splice(0, 3);
-                expression_as_array = [...part1, number, ...part2];
+        // 2. Function or operator
+        else if (DEFINITIONS.has(token)) {
+            const def = DEFINITIONS.get(token);
+            
+            if (def.arity === 2) { // Binary
+                if (valueStack.length < 2) throw new Error(`Binary operator '${def.name}' requires two operands.`);
+                const b = valueStack.pop();
+                const a = valueStack.pop();
+                valueStack.push(def.func(a, b));
+            }
+            else if (def.arity === 1) { // Unary
+                if (valueStack.length < 1) throw new Error(`Unary operator '${def.name}' requires one operand.`);
+                const a = valueStack.pop();
+                valueStack.push(def.func(a));
             }
         }
-        // if left element and right are NOT both numbers just skip because it might be an express
-        // so we will calculate it later when the expression is calculate by other functions
+        else {
+            throw new Error(`Unknown token during evaluation: ${token}`);
+        }
 
-    }
-
-    return expression_as_array;
-}
-
-/**
- * Calculate exponent ^ function = [4, '^', 2] = [16]
- * if left element and right are NOT both numbers it will just skip because it might be an expression. So that it can be calculate it later when the expression is calculate by other functions
- * @param {Array} expression_as_array 
- */
-function calculate_exp(expression_as_array) {
-    return calculate_2_value_expressions('^', expression_as_array, 'Syntax Math Error: Exponent expression', (base, exp) => Math.pow(base, exp));
-}
-
-/**
- * Calculate root 'r' function = [2, 'r', 16] = SQRT16 = [4]
- * if left element and right are NOT both numbers it will just skip because it might be an expression. So that it can be calculate it later when the expression is calculate by other functions
- * @param {Array} expression_as_array 
- */
-function calculate_root(expression_as_array) {
-    return calculate_2_value_expressions('r', expression_as_array, 'Syntax Math Error: root expression', (num1, num2) => Math.pow(num2, 1.0 / num1));
-}
-
-
-/**
- * Calculate add + function = [4, '+', 2] = [6]
- * if left element and right are NOT both numbers it will just skip because it might be an expression. So that it can be calculate it later when the expression is calculate by other functions
- * @param {Array} expression_as_array 
- */
-function calculate_add(expression_as_array) {
-    return calculate_2_value_expressions('+', expression_as_array, 'Syntax Math Error: Adding expression', (num1, num2) => (num1 + num2));
-}
-
-/**
- * Calculate substract - function = [4, '-', 2] = [2]
- * if left element and right are NOT both numbers it will just skip because it might be an expression. So that it can be calculate it later when the expression is calculate by other functions
- * @param {Array} expression_as_array 
- */
-function calculate_substract(expression_as_array) {
-    return calculate_2_value_expressions('-', expression_as_array, 'Syntax Math Error: Substracting expression', (num1, num2) => (num1 - num2));
-}
-
-/**
- * Calculate multiply * function = [4, '*', 2] = [8]
- * if left element and right are NOT both numbers it will just skip because it might be an expression. So that it can be calculate it later when the expression is calculate by other functions
- * @param {Array} expression_as_array 
- */
-function calculate_multiply(expression_as_array) {
-    return calculate_2_value_expressions('*', expression_as_array, 'Syntax Math Error: Multiplying expression', (num1, num2) => (num1 * num2));
-}
-
-
-/**
- * Calculate divide / function = [4, '/', 2] = [2]
- * if left element and right are NOT both numbers it will just skip because it might be an expression. So that it can be calculate it later when the expression is calculate by other functions
- * @param {Array} expression_as_array 
- */
-function calculate_divide(expression_as_array) {
-    return calculate_2_value_expressions('/', expression_as_array, 'Syntax Math Error: Dividing expression', (num1, num2) => parseFloat(num1 / (num2 * 1.0)));
-}
-
-
-/**
- * Calculate sin function 
- * if the right is NOT a number it will just skip because it might be an expression. So that it can be calculate it later when the expression is calculate by other functions
- * @param {Array} expression_as_array 
- */
-function calculate_sin(expression_as_array) {
-    return calculate_1_value_expressions('S', expression_as_array, 'Syntax Math Error: Sin expression', (num) => Math.sin(num));
-}
-
-/**
- * Calculate sinh function 
- * if the right is NOT a number it will just skip because it might be an expression. So that it can be calculate it later when the expression is calculate by other functions
- * @param {Array} expression_as_array 
- */
-function calculate_sinh(expression_as_array) {
-    return calculate_1_value_expressions('s', expression_as_array, 'Syntax Math Error: Sinh expression', (num) => Math.sinh(num));
-}
-
-
-/**
- * Calculate sin function 
- * if the right is NOT a number it will just skip because it might be an expression. So that it can be calculate it later when the expression is calculate by other functions
- * @param {Array} expression_as_array 
- */
-function calculate_cos(expression_as_array) {
-    return calculate_1_value_expressions('C', expression_as_array, 'Syntax Math Error: Sin expression', (num) => Math.sin(num));
-}
-
-/**
- * Calculate sinh function 
- * if the right is NOT a number it will just skip because it might be an expression. So that it can be calculate it later when the expression is calculate by other functions
- * @param {Array} expression_as_array 
- */
-function calculate_cosh(expression_as_array) {
-    return calculate_1_value_expressions('c', expression_as_array, 'Syntax Math Error: cosh expression', (num) => Math.cosh(num));
-}
-
-
-/**
- * Calculate sin function 
- * if the right is NOT a number it will just skip because it might be an expression. So that it can be calculate it later when the expression is calculate by other functions
- * @param {Array} expression_as_array 
- */
-function calculate_tan(expression_as_array) {
-    return calculate_1_value_expressions('T', expression_as_array, 'Syntax Math Error: Sin expression', (num) => Math.sin(num));
-}
-
-/**
- * Calculate sinh function 
- * if the right is NOT a number it will just skip because it might be an expression. So that it can be calculate it later when the expression is calculate by other functions
- * @param {Array} expression_as_array 
- */
-function calculate_tanh(expression_as_array) {
-    return calculate_1_value_expressions('t', expression_as_array, 'Syntax Math Error: tanh expression', (num) => Math.tanh(num));
-}
-
-
-/**
- * Calculate e natural 
- * if the right is NOT a number it will just skip because it might be an expression. So that it can be calculate it later when the expression is calculate by other functions
- * @param {Array} expression_as_array 
- */
-function calculate_e(expression_as_array) {
-    return calculate_1_value_expressions('e', expression_as_array, 'Syntax Math Error: e natural', (num) => Math.exp(num));
-}
-
-/**
- * Calculate ln natural 
- * if the right is NOT a number it will just skip because it might be an expression. So that it can be calculate it later when the expression is calculate by other functions
- * @param {Array} expression_as_array 
- */
-function calculate_ln(expression_as_array) {
-    return calculate_1_value_expressions('E', expression_as_array, 'Syntax Math Error: Ln', (num) => Math.log(num));
-}
-
-/**
- * Calculate log 10 
- * if the right is NOT a number it will just skip because it might be an expression. So that it can be calculate it later when the expression is calculate by other functions
- * @param {Array} expression_as_array 
- */
-function calculate_log10(expression_as_array) {
-    return calculate_1_value_expressions('L', expression_as_array, 'Syntax Math Error: log10 ', (num) => Math.log10(num));
-}
-
-/**
- * Calculate logx natural 
- * if the right is NOT a number it will just skip because it might be an expression. So that it can be calculate it later when the expression is calculate by other functions
- * @param {Array} expression_as_array 
- */
-function calculate_log(expression_as_array) {
-    // https://stackoverflow.com/questions/3019278/how-can-i-specify-the-base-for-math-log-in-javascript
-    return calculate_2_value_expressions('l', expression_as_array, 'Syntax Math Error: Logx', (base, raised) => Math.log(raised) / Math.log(base));
-}
-
-function calculate_double_negatives(expression_as_array) {
-
-    for (const index in expression_as_array) {
-        const i = parseInt(index);
-        if (i < expression_as_array.length - 1) {
-            // when a double negative is found next to each other
-            if (expression_as_array[i] == '-' && expression_as_array[i + 1] == '-') {
-
-                //remove the double negatives and replace with '+'
-                const array_expression = [...expression_as_array.slice(0, i), '+', ...expression_as_array.slice(i + 2)];
-                return array_expression;
+        // Check for math domain errors (NaN, Infinity)
+        if (valueStack.length > 0) {
+            const result = valueStack[valueStack.length - 1];
+            if (isNaN(result) || !isFinite(result)) {
+                throw new Error("Math domain error (e.g., log(-1)) or division by zero.");
             }
         }
     }
-    return expression_as_array;
+
+    if (valueStack.length !== 1)
+        throw new Error("Invalid RPN expression (too many/few operands).");
+
+    return valueStack.pop();
 }
 
-/**
- * Performs a series of mathematical calculations on a given list of expressions.
- * It evaluates trigonometric functions (sin, sinh, cos, cosh, tan, tanh),
- * logarithmic functions (log10, ln, log), exponentials, roots, and basic
- * arithmetic operations (division, multiplication, subtraction, addition).
- * The calculations are done in sequential order as listed above.
- *
- * @param {Array} list - An array of mathematical expressions to be evaluated.
- * @returns {Array} - The modified array after performing all calculations.
- */
-
-function math_calculation(list) {
-    // calculate trig
-    list = calculate_sin(list);
-    list = calculate_sinh(list);
-    list = calculate_cos(list);
-    list = calculate_cosh(list);
-    list = calculate_tan(list);
-    list = calculate_tanh(list);
-
-    // calculate logarithms
-    list = calculate_log10(list);
-    list = calculate_ln(list);
-    list = calculate_log(list);
-
-    // calculate exponents and roots
-    list = calculate_e(list);
-    list = calculate_exp(list);
-    list = calculate_root(list);
-
-    // calculate normal arthimatic
-    list = calculate_divide(list);
-    list = calculate_multiply(list);
-    list = calculate_substract(list);
-    list = calculate_add(list);
-
-    list = calculate_double_negatives(list);
-    return list;
-}
+// --- 7. Main Execution Flow ---
 
 /**
- * Evaluates the innermost bracketed expression in a list of mathematical symbols.
- * 
- * This function iterates over a list of mathematical symbols, identifies the innermost
- * bracketed expression, and uses a callback function to calculate its value. It assumes
- * balanced brackets within the expression. If an imbalance is detected, an error is thrown.
- * 
- * @param {Array} list - An array representing a mathematical expression with brackets.
- * @param {Function} callback_calculation - A function that takes the innermost expression
- *                                          and returns its calculated value.
- * @returns {Array} - The updated list after the innermost bracket expression is evaluated.
- * @throws {Error} - Throws an error if there are unmatched brackets in the expression.
- */
-
-function calculate_innermost_brackets(list, callback_calculation) {
-    // check for brackets and get details
-    // let first_open_bracket = -1;
-    let last_open_bracket = -1;
-    let first_close_bracket = -1;
-    // let last_close_bracket = -1;
-    let count_open_bracket = 0;
-    let count_close_bracket = 0;
-
-    for (const i in list) {
-
-        // count the brackets
-        if (list[i] == '(') {
-            last_open_bracket = parseInt(i);
-            count_open_bracket++;
-        } else if (list[i] == ')') {
-            count_close_bracket++;
-            if (first_close_bracket == -1) first_close_bracket = parseInt(i);
-        }
-
-        // if there are more close brackets than open ones mid-count error
-        if (count_close_bracket > count_open_bracket) throw Error('Math Syntax Error: Brackets')
-
-
-        // if the count of the opening and closing brackets match
-        // found the indices of the open and close brackets to start calcalating from
-        if (count_open_bracket == count_close_bracket && (first_close_bracket != -1)) {
-            const inner_expresson = list.slice(last_open_bracket + 1, first_close_bracket);
-
-            // if the inner expression is number a number 
-            if (inner_expresson.length == 1 && typeof inner_expresson[0] == 'number') {
-                const array_expression = [...list.slice(0, last_open_bracket), inner_expresson[0], ...list.slice(first_close_bracket + 1)];
-                return array_expression;
-            } else {
-                const ans = callback_calculation(inner_expresson);
-                const array_expression = [...list.slice(0, last_open_bracket), ...ans, ...list.slice(first_close_bracket + 1)]
-                return array_expression;
-            }
-
-        }
-    }
-
-    if (count_open_bracket != count_close_bracket) throw Error('Math Syntax Error: Uneven Brackets')
-
-    return list;
-}
-
-/**
- * Right a math expression that should be calculated
- * @param {String} expression 
+ * Main calculation function.
  */
 function calculate(expression) {
-    let list = change_expression_to_array(expression);
-    list = change_string_numbers_to_integers(list); // combine string numbers into one number
-    list = construct_decimal_numbers(list); // construct decimal numbers
-
-    // replace constants
-    for (const i in list) {
-        if (list[i] == 'p') {
-            list[i] = Math.PI;
-        }
+    initializeDefinitions();
+    if (!expression || expression.trim().length === 0) {
+        throw new Error("Expression cannot be empty.");
     }
-
-    // recursive calcalutions until answer is found.
-    while (list.includes('(')) list = calculate_innermost_brackets(list, math_calculation);
-    while (list.length > 1) list = math_calculation(list);
-    return list[0];
+    
+    const tokens = tokenize(expression);
+    const rpn = infixToRpn(tokens);
+    
+    // RPN DEBUG: console.log("RPN:", rpn); 
+    
+    return evaluateRpn(rpn);
 }
 
+// --- 8. Main CLI Loop (Node.js) ---
 
-// Entry Point for calculations
-if (process.argv.length != 3) console.warn('Invalid Math Express')
-else console.log(calculate(process.argv[2]));
+function main() {
+    console.log("--- JavaScript CLI Calculator (Node.js Infix Mode) ---");
+    console.log("Supported Operations:");
+    console.log("  Binary: +, -, *, /, ^ (Power), r (Root: a r b = b-th root of a)");
+    console.log("  Unary (Prefix): S, s, C, c, T, t, l, L (e.g., S30)");
+    console.log("  Unary (Postfix): ! (Factorial, e.g., 6!)");
+    console.log("  Constant: p (PI)");
+    console.log("\nNOTE: Use explicit multiplication (e.g., 2*(3) is correct).");
+    console.log("Type 'exit' or 'quit' to end.\n");
+
+    const readline = require('readline').createInterface({
+        input: process.stdin,
+        output: process.stdout
+    });
+
+    const prompt = () => {
+        readline.question("Expression: ", (input) => {
+            const expression = input.trim();
+
+            if (expression.length === 0 || expression.toLowerCase() === 'exit' || expression.toLowerCase() === 'quit') {
+                readline.close();
+                console.log("Exiting calculator. Goodbye!");
+                return;
+            }
+
+            try {
+                const result = calculate(expression);
+                console.log(`Result: **${result.toFixed(10)}**\n`);
+            } catch (e) {
+                console.error(`Error: Invalid expression. ${e.message}\n`);
+            }
+            
+            prompt(); // Loop back for the next expression
+        });
+    };
+
+    prompt();
+}
+
+// Start the CLI application
+main();

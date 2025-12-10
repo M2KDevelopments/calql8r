@@ -1,588 +1,362 @@
 package main
 
 import (
-	"bytes"
-	"errors"
+	"bufio"
 	"fmt"
-	"log"
 	"math"
 	"os"
+	"regexp"
 	"strconv"
+	"strings"
 )
 
-// Constants
-const DECIMAL_POINT rune = '.'
-const OPERATOR_ADD rune = '+'
-const OPERATOR_SUBSTRACT rune = '-'
-const OPERATOR_MULTPILY rune = '*'
-const OPERATOR_DIVIDE rune = '/'
-const OPERATOR_LOGx rune = 'l'
-const OPERATOR_POW rune = '^'
-const OPERATOR_ROOT rune = 'r'
-const OPERATOR_SIN rune = 'S'
-const OPERATOR_SINH rune = 's'
-const OPERATOR_COS rune = 'C'
-const OPERATOR_COSH rune = 'c'
-const OPERATOR_TAN rune = 'T'
-const OPERATOR_TANH rune = 't'
-const OPERATOR_LOG10 rune = 'L'
-const OPERATOR_LN rune = 'E'
-const OPERATOR_FACTORIAL rune = '!'
-const PI rune = 'p'
-const BRACKET_OPEN rune = '('
-const BRACKET_CLOSE rune = ')'
-const FACTORIAL rune = '!'
-const PERMUTATIONS rune = 'Y'
-const COMBINATIONS rune = 'Z'
+// --- 1. Operator and Function Definitions ---
 
-const NUMBER rune = 'n'
-const NONE rune = ' '
+// Define custom function types
+type BinaryFunction func(a, b float64) float64
+type UnaryFunction func(a float64) float64
 
-const FUNCTION_VALUE_DIRECTION_RIGHT byte = 1
-const FUNCTION_VALUE_DIRECTION_LEFT byte = 0
-
-type Element struct {
-	value        float64
-	integers     int64
-	chr          rune
-	digit_length int
+// OpFuncDef represents an operator or function with its properties.
+type OpFuncDef struct {
+	Name              string
+	Precedence        int
+	IsLeftAssociative bool
+	Arity             int         // 1 for unary, 2 for binary
+	Function          interface{} // Function can be BinaryFunction or UnaryFunction
 }
 
-func construct_numbers_from_string_of_integers(expression []Element) ([]Element, error) {
+// Global static map for all known operators and functions
+var definitions = make(map[string]OpFuncDef)
 
-	var start = -1
-	var end = 0
-	var numbers = []byte{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9'}
+// --- 2. Function Implementations ---
 
-	for i := 0; i < len(expression); i++ {
+// Binary Functions
+func _add(a, b float64) float64      { return a + b }
+func _subtract(a, b float64) float64 { return a - b }
+func _multiply(a, b float64) float64 { return a * b }
+func _divide(a, b float64) float64   { return a / b }
+func _power(a, b float64) float64    { return math.Pow(a, b) }
 
-		var c rune = expression[i].chr
-		if bytes.ContainsRune(numbers, c) {
-			if start == -1 {
-				start = i
+// Custom Root: a r b means b-th root of a. (Root degree is b)
+func _root(a, b float64) float64 {
+	if a < 0 && math.Mod(b, 2.0) == 0.0 {
+		panic("Cannot take even root of a negative number.")
+	}
+	return math.Pow(a, 1.0/b)
+}
+
+// Unary Functions
+func _sin(a float64) float64   { return math.Sin(a) }
+func _sinh(a float64) float64  { return math.Sinh(a) }
+func _cos(a float64) float64   { return math.Cos(a) }
+func _cosh(a float64) float64  { return math.Cosh(a) }
+func _tan(a float64) float64   { return math.Tan(a) }
+func _tanh(a float64) float64  { return math.Tanh(a) }
+func _ln(a float64) float64    { return math.Log(a) } // Natural log
+func _log10(a float64) float64 { return math.Log10(a) }
+
+// Unary Post-fix Factorial
+func _factorial(a float64) float64 {
+	if a < 0 || math.Mod(a, 1.0) != 0.0 {
+		panic("Factorial only defined for non-negative integers.")
+	}
+	if a == 0 {
+		return 1.0
+	}
+	res := 1.0
+	for i := 1; i <= int(a); i++ {
+		res *= float64(i)
+	}
+	return res
+}
+
+// --- 3. Initialization ---
+
+func init() {
+	// Precedence: Higher number binds tighter
+
+	// Postfix Unary (Highest Precedence)
+	definitions["!"] = OpFuncDef{Name: "!", Precedence: 6, IsLeftAssociative: true, Arity: 1, Function: UnaryFunction(_factorial)}
+
+	// Prefix Unary Functions (Right Associative precedence 5)
+	definitions["S"] = OpFuncDef{Name: "S", Precedence: 5, IsLeftAssociative: false, Arity: 1, Function: UnaryFunction(_sin)}
+	definitions["s"] = OpFuncDef{Name: "s", Precedence: 5, IsLeftAssociative: false, Arity: 1, Function: UnaryFunction(_sinh)}
+	definitions["C"] = OpFuncDef{Name: "C", Precedence: 5, IsLeftAssociative: false, Arity: 1, Function: UnaryFunction(_cos)}
+	definitions["c"] = OpFuncDef{Name: "c", Precedence: 5, IsLeftAssociative: false, Arity: 1, Function: UnaryFunction(_cosh)}
+	definitions["T"] = OpFuncDef{Name: "T", Precedence: 5, IsLeftAssociative: false, Arity: 1, Function: UnaryFunction(_tan)}
+	definitions["t"] = OpFuncDef{Name: "t", Precedence: 5, IsLeftAssociative: false, Arity: 1, Function: UnaryFunction(_tanh)}
+	definitions["l"] = OpFuncDef{Name: "l", Precedence: 5, IsLeftAssociative: false, Arity: 1, Function: UnaryFunction(_ln)}
+	definitions["L"] = OpFuncDef{Name: "L", Precedence: 5, IsLeftAssociative: false, Arity: 1, Function: UnaryFunction(_log10)}
+
+	// Binary Operators
+	definitions["^"] = OpFuncDef{Name: "^", Precedence: 4, IsLeftAssociative: false, Arity: 2, Function: BinaryFunction(_power)}
+	definitions["r"] = OpFuncDef{Name: "r", Precedence: 4, IsLeftAssociative: true, Arity: 2, Function: BinaryFunction(_root)}
+
+	definitions["*"] = OpFuncDef{Name: "*", Precedence: 3, IsLeftAssociative: true, Arity: 2, Function: BinaryFunction(_multiply)}
+	definitions["/"] = OpFuncDef{Name: "/", Precedence: 3, IsLeftAssociative: true, Arity: 2, Function: BinaryFunction(_divide)}
+
+	definitions["+"] = OpFuncDef{Name: "+", Precedence: 2, IsLeftAssociative: true, Arity: 2, Function: BinaryFunction(_add)}
+	// We use an internal token, 'BIN_SUB', for binary subtraction to distinguish it from unary minus.
+	definitions["BIN_SUB"] = OpFuncDef{Name: "-", Precedence: 2, IsLeftAssociative: true, Arity: 2, Function: BinaryFunction(_subtract)}
+}
+
+// --- 4. Lexer/Tokenizer ---
+
+// Regex to capture the different token types. This simplifies the process greatly.
+var tokenRegex = regexp.MustCompile(`(\d+\.?\d*|\.\d+)|([SsCcTtLlr\^\*\/\+\-\!\(\)])|p`)
+
+// _tokenize converts the raw input string into a list of tokens.
+func _tokenize(expression string) []string {
+	// 1. Preprocess: Insert spaces around all single-character tokens (except inside numbers)
+	processed := expression
+	tokensToSeparate := []string{"(", ")", "+", "*", "/", "^", "!", "r", "S", "s", "C", "c", "T", "t", "l", "L", "p"}
+	for _, sep := range tokensToSeparate {
+		processed = strings.ReplaceAll(processed, sep, " "+sep+" ")
+	}
+
+	// Separate '-' which needs special handling
+	processed = strings.ReplaceAll(processed, "-", " - ")
+
+	// Clean up multiple spaces and trim
+	tokens := strings.Fields(processed)
+
+	// 2. Handle Unary Minus vs. Binary Minus
+	resultTokens := []string{}
+	for i, token := range tokens {
+		if token == "-" {
+			// Check if the preceding token is an operand (number, constant, '!', or ')')
+			isPrecedingTokenOperand := i > 0 &&
+				(len(resultTokens) > 0 && (isNumber(resultTokens[len(resultTokens)-1]) || resultTokens[len(resultTokens)-1] == "p" || resultTokens[len(resultTokens)-1] == "!" || resultTokens[len(resultTokens)-1] == ")"))
+
+			if i == 0 || !isPrecedingTokenOperand {
+				// Unary Minus: Merge it with the next token
+				if i+1 < len(tokens) {
+					tokens[i+1] = token + tokens[i+1]
+				}
+				// Skip the current token as it's merged into the next
+			} else {
+				// Binary Minus: Use the internal token
+				resultTokens = append(resultTokens, "BIN_SUB")
 			}
-			end = i
-			if end == len(expression)-1 && start != -1 {
-				var number = ""
-				for j := start; j <= end; j++ {
-					var str = string(expression[j].chr)
-					number += str
+		} else {
+			resultTokens = append(resultTokens, token)
+		}
+	}
+	return resultTokens
+}
+
+// isNumber is a simple helper to check if a string is a number (including negative numbers merged by the tokenizer).
+func isNumber(s string) bool {
+	_, err := strconv.ParseFloat(s, 64)
+	return err == nil
+}
+
+// --- 5. Shunting-Yard Algorithm (Infix to RPN) ---
+
+// _infixToRpn converts a list of infix tokens to a list of RPN tokens.
+func _infixToRpn(infixTokens []string) ([]string, error) {
+	outputQueue := []string{}
+	operatorStack := []string{}
+
+	for _, token := range infixTokens {
+		// 1. If the token is a number or constant 'p', add it to the output queue.
+		if isNumber(token) || token == "p" {
+			outputQueue = append(outputQueue, token)
+		} else if def, exists := definitions[token]; exists {
+			// 2. If the token is a function or prefix unary operator
+			if def.Arity == 1 && token != "!" {
+				operatorStack = append(operatorStack, token)
+			} else if def.Arity == 2 {
+				// 3. If the token is a binary operator
+				for len(operatorStack) > 0 {
+					topToken := operatorStack[len(operatorStack)-1]
+					if topToken == "(" {
+						break
+					}
+
+					if topDef, ok := definitions[topToken]; ok {
+						// Check precedence and associativity
+						isHigherPrecedence := def.Precedence < topDef.Precedence
+						isSamePrecedenceLeftAssoc := def.Precedence == topDef.Precedence && def.IsLeftAssociative
+
+						if isHigherPrecedence || isSamePrecedenceLeftAssoc {
+							outputQueue = append(outputQueue, topToken)
+							operatorStack = operatorStack[:len(operatorStack)-1] // Pop
+						} else {
+							break
+						}
+					} else {
+						// Should only hit '('
+						break
+					}
 				}
-				var bitSize = 64
-				var base = 10
-				var value, err = strconv.ParseInt(number, base, bitSize)
+				operatorStack = append(operatorStack, token)
+			} else if token == "!" {
+				// 4. If the token is a postfix operator '!'
+				outputQueue = append(outputQueue, token)
+			}
+		} else if token == "(" {
+			// 5. If the token is '(', push it onto the operator stack.
+			operatorStack = append(operatorStack, token)
+		} else if token == ")" {
+			// 6. If the token is ')', pop operators until '(' is found.
+			for len(operatorStack) > 0 && operatorStack[len(operatorStack)-1] != "(" {
+				outputQueue = append(outputQueue, operatorStack[len(operatorStack)-1])
+				operatorStack = operatorStack[:len(operatorStack)-1] // Pop
+			}
+			if len(operatorStack) == 0 {
+				return nil, fmt.Errorf("mismatched parentheses: missing '('")
+			}
+			operatorStack = operatorStack[:len(operatorStack)-1] // Pop the '('
 
-				// Handle error
-				if err != nil {
-
-					return expression, err
-				}
-
-				expression[start].integers = value
-				expression[start].value = float64(value)
-				expression[start].chr = NUMBER
-				for j := start + 1; j <= end; j++ {
-					expression[j].chr = NONE
+			// If there is a function token at the top of the stack, pop it.
+			if len(operatorStack) > 0 {
+				topToken := operatorStack[len(operatorStack)-1]
+				if _, ok := definitions[topToken]; ok {
+					outputQueue = append(outputQueue, topToken)
+					operatorStack = operatorStack[:len(operatorStack)-1] // Pop function
 				}
 			}
 		} else {
-			if start != -1 {
-				var number = ""
-				for j := start; j <= end; j++ {
-					var str = string(expression[j].chr)
-					number += str
+			return nil, fmt.Errorf("invalid token during parsing: %s", token)
+		}
+	}
+
+	// 7. Pop remaining operators from stack to RPN output.
+	for len(operatorStack) > 0 {
+		token := operatorStack[len(operatorStack)-1]
+		if token == "(" {
+			return nil, fmt.Errorf("mismatched parentheses: missing ')'")
+		}
+		outputQueue = append(outputQueue, token)
+		operatorStack = operatorStack[:len(operatorStack)-1]
+	}
+
+	return outputQueue, nil
+}
+
+// --- 6. RPN Evaluation ---
+
+// _evaluateRpn evaluates a list of RPN tokens.
+func _evaluateRpn(rpnTokens []string) (float64, error) {
+	valueStack := []float64{}
+
+	for _, token := range rpnTokens {
+		// 1. If the token is a number or constant 'p', push the value onto the stack.
+		if isNumber(token) {
+			num, _ := strconv.ParseFloat(token, 64)
+			valueStack = append(valueStack, num)
+		} else if token == "p" {
+			valueStack = append(valueStack, math.Pi)
+		} else if def, exists := definitions[token]; exists {
+			// 2. If the token is a function or operator.
+			if def.Arity == 2 { // Binary
+				if len(valueStack) < 2 {
+					return 0, fmt.Errorf("binary operator '%s' requires two operands", def.Name)
 				}
-				var bitSize = 64
-				var base = 10
-				value, err := strconv.ParseInt(number, base, bitSize)
+				b := valueStack[len(valueStack)-1]
+				a := valueStack[len(valueStack)-2]
+				valueStack = valueStack[:len(valueStack)-2] // Pop two
 
-				// Handle error
-				if err != nil {
-					return expression, err
+				result := def.Function.(BinaryFunction)(a, b)
+				if math.IsNaN(result) || math.IsInf(result, 0) {
+					return result, fmt.Errorf("math domain error or division by zero")
 				}
+				valueStack = append(valueStack, result)
 
-				expression[start].integers = value
-				expression[start].value = float64(value)
-				expression[start].chr = NUMBER
-				for j := start + 1; j <= end; j++ {
-					expression[j].chr = NONE
+			} else if def.Arity == 1 { // Unary
+				if len(valueStack) < 1 {
+					return 0, fmt.Errorf("unary operator '%s' requires one operand", def.Name)
 				}
-				start = -1
-			}
-		}
-	}
+				a := valueStack[len(valueStack)-1]
+				valueStack = valueStack[:len(valueStack)-1] // Pop one
 
-	// Remove NONE elements
-	list := []Element{}
-	for i := 0; i < len(expression); i++ {
-		if expression[i].chr != NONE {
-			list = append(list, expression[i])
-		}
-	}
-	return list, nil
-}
-
-func construct_decimal_numbers(expression []Element) ([]Element, error) {
-
-	for i := 0; i < len(expression); i++ {
-		if expression[i].chr == DECIMAL_POINT {
-
-			if i == 0 && (i == len(expression)-1) {
-				return expression, errors.New("MISPLACED DEMICAL")
-			}
-
-			if expression[i-1].chr != NUMBER || expression[i+1].chr != NUMBER {
-				return expression, errors.New("INVALID DECIMAL NUMBER FORMAT")
-			}
-
-			var number = fmt.Sprintf("%d.%d", expression[i-1].integers, expression[i+1].integers)
-			var value, err = strconv.ParseFloat(number, 64)
-			expression[i-1].value = value
-			expression[i-1].chr = NUMBER
-
-			if err != nil {
-				return expression, errors.New("ERROR DECIMAL NUMBER CONVERSION")
-			}
-
-			expression[i].chr = NONE
-			expression[i+1].chr = NONE
-		}
-	}
-
-	// Remove NONE elements
-	list := []Element{}
-	for i := 0; i < len(expression); i++ {
-		if expression[i].chr != NONE {
-			list = append(list, expression[i])
-		}
-	}
-	return list, nil
-}
-
-func convert_negative_numbers(expression []Element) ([]Element, error) {
-	for i := 0; i < len(expression); i++ {
-		if expression[i].chr == OPERATOR_SUBSTRACT {
-			if i == len(expression)-1 {
-				return expression, errors.New("MISPLACED MINUS")
-			}
-			if expression[i+1].chr == OPERATOR_SUBSTRACT {
-				// double negative
-				expression[i].chr = OPERATOR_ADD
-				expression[i+1].chr = NONE
-			} else if i == 0 && expression[i+1].chr == NUMBER {
-				expression[i].chr = NONE
-				expression[i+1].value = expression[i+1].value * -1
-			} else if i > 0 && expression[i-1].chr == NUMBER && expression[i+1].chr == NUMBER {
-				expression[i].chr = NONE
-				expression[i+1].value = expression[i+1].value * -1
-			}
-		}
-	}
-	// Remove NONE elements
-	list := []Element{}
-	for i := 0; i < len(expression); i++ {
-		if expression[i].chr != NONE {
-			list = append(list, expression[i])
-		}
-	}
-	return list, nil
-}
-
-func calculate_1_value_expression(expression []Element, operation_symbol rune, direction byte, calculation_function func(float64) (float64, error)) ([]Element, error) {
-
-	for i := 0; i < len(expression); i++ {
-		if expression[i].chr == operation_symbol {
-			if i == 0 && direction == FUNCTION_VALUE_DIRECTION_LEFT {
-				return expression, nil
-			}
-			if i == len(expression)-1 && direction == FUNCTION_VALUE_DIRECTION_RIGHT {
-				return expression, nil
-			}
-			if expression[i-1].chr == NUMBER && direction == FUNCTION_VALUE_DIRECTION_LEFT {
-				return expression, nil
-			}
-			if expression[i+1].chr == NUMBER && direction == FUNCTION_VALUE_DIRECTION_RIGHT {
-				return expression, nil
-			}
-
-			if direction == FUNCTION_VALUE_DIRECTION_LEFT {
-				result, err := calculation_function(expression[i-1].value)
-				if err != nil {
-					return expression, err
+				result := def.Function.(UnaryFunction)(a)
+				if math.IsNaN(result) || math.IsInf(result, 0) {
+					return result, fmt.Errorf("math domain error or division by zero")
 				}
-				// Remove unnecessary elements and update value
-				expression[i-1].value = result
-				expression[i-1].chr = NUMBER
-				expression[i].chr = NONE
-
-			} else if direction == FUNCTION_VALUE_DIRECTION_RIGHT {
-				result, err := calculation_function(expression[i+1].value)
-				if err != nil {
-					return expression, err
-				}
-				// Remove unnecessary elements and update value
-				expression[i].value = result
-				expression[i].chr = NUMBER
-				expression[i+1].chr = NONE
+				valueStack = append(valueStack, result)
 			}
+		} else {
+			return 0, fmt.Errorf("unknown token during evaluation: %s", token)
 		}
 	}
 
-	// Remove NONE elements
-	list := []Element{}
-	for i := 0; i < len(expression); i++ {
-		if expression[i].chr != NONE {
-			list = append(list, expression[i])
-		}
+	if len(valueStack) != 1 {
+		return 0, fmt.Errorf("invalid RPN expression (too many/few operands)")
 	}
-	return list, nil
+
+	return valueStack[0], nil
 }
 
-func calculate_2_value_expressions(expression []Element, operation_symbol rune, calculation_function func(float64, float64) (float64, error)) ([]Element, error) {
+// --- 7. Main Execution Flow ---
 
-	var prev_number_index = -1 // keep tracker of number/characters to ignore
-	for i := 0; i < len(expression); i++ {
-		if expression[i].chr == operation_symbol {
-
-			if i == len(expression)-1 || i == 0 {
-				return expression, errors.New("MATH OPERATOR ERROR")
-			}
-
-			// return expression, errors.New("FNX MATH ERROR")
-			var prevNum = expression[i-1]
-			var nextNum = expression[i+1]
-
-			// One or both elements on either side of the function is not a number
-			if prevNum.chr == NUMBER && nextNum.chr == NUMBER && prev_number_index == -1 {
-
-				var result, err = calculation_function(prevNum.value, nextNum.value)
-				if err != nil {
-					return expression, err
-				}
-
-				// Remove unnecessary elements and update value
-				prev_number_index = i - 1
-				expression[prev_number_index].value = result
-				expression[prev_number_index].chr = NUMBER
-				expression[i].chr = NONE
-				expression[i+1].chr = NONE
-			} else if nextNum.chr == NUMBER && prev_number_index != -1 {
-				prevNum = expression[prev_number_index]
-				var result, err = calculation_function(prevNum.value, nextNum.value)
-				if err != nil {
-					return expression, err
-				}
-
-				// Remove unnecessary elements and update value
-				expression[prev_number_index].value = result
-				expression[prev_number_index].chr = NUMBER
-				expression[i].chr = NONE
-				expression[i+1].chr = NONE
-			} else {
-				// return error: Function Calculation of a Non-Number
-				return expression, errors.New("FNX MATH ERROR")
-			}
-
-		} else if expression[i].chr != NONE {
-			prev_number_index = -1
-		}
+// Calculate is the main entry point to evaluate an infix expression string.
+func Calculate(expression string) (float64, error) {
+	if strings.TrimSpace(expression) == "" {
+		return 0, fmt.Errorf("empty expression")
 	}
 
-	// Remove NONE elements
-	list := []Element{}
-	for i := 0; i < len(expression); i++ {
-		if expression[i].chr != NONE {
-			list = append(list, expression[i])
-		}
+	// 1. Tokenize
+	tokens := _tokenize(expression)
+
+	// 2. Infix to RPN (Shunting-Yard)
+	rpn, err := _infixToRpn(tokens)
+	if err != nil {
+		return 0, err
 	}
-	return list, nil
+
+	// DEBUG: Print RPN
+	// fmt.Printf("RPN: %v\n", rpn)
+
+	// 3. Evaluate RPN
+	result, err := _evaluateRpn(rpn)
+	if err != nil {
+		return 0, err
+	}
+
+	return result, nil
 }
 
-func calculate_factorial(number float64) (float64, error) {
-	if number < 0 {
-		return 0.0, errors.New("FACTORIAL OFF NEGATIVE NUMBER")
-	}
-	if number == 0.0 {
-		return 1.0, nil
-	}
-	if number == 1.0 {
-		return 1.0, nil
-	}
-	if number == 2.0 {
-		return 2.0, nil
-	}
-	const FACTORIAL_LIMIT = 69
-	if number > FACTORIAL_LIMIT {
-		return 0, errors.New("FACTORIAL TOO LARGE")
-	}
-	var total = 1
-	for n := 1; n <= int(number); n++ {
-		total *= n
-	}
-	return float64(total), nil
-}
-
-func calculate_permutation(n float64, r float64) (float64, error) {
-	if n < r || n < 0 || r < 0 {
-		return 0.0, errors.New("Math Erorr")
-	}
-	var above, err = calculate_factorial(n)
-	below, err := calculate_factorial(n - r)
-	return (above / below), err
-}
-
-func calculate_combinations(n float64, r float64) (float64, error) {
-	if n < r || n < 0 || r < 0 {
-		return 0.0, errors.New("Math Erorr")
-	}
-	var above, err = calculate_factorial(n)
-	_r, err := calculate_factorial(r)
-	n_r, err := calculate_factorial(n - r)
-	return above / (_r * n_r), err
-}
-
-func calculate_math(expr []Element) (float64, error) {
-
-	// factorial and nPr and nCr
-	var expression, err = calculate_1_value_expression(expr, OPERATOR_FACTORIAL, FUNCTION_VALUE_DIRECTION_LEFT, calculate_factorial)
-	if err != nil {
-		return 0.0, err
-	}
-
-	expression, err = calculate_2_value_expressions(expression, PERMUTATIONS, calculate_permutation)
-	if err != nil {
-		return 0.0, err
-	}
-
-	expression, err = calculate_2_value_expressions(expression, COMBINATIONS, calculate_combinations)
-	if err != nil {
-		return 0.0, err
-	}
-
-	// calculate trigonometry
-	expression, err = calculate_1_value_expression(expression, OPERATOR_SIN, FUNCTION_VALUE_DIRECTION_RIGHT, func(f float64) (float64, error) { return math.Sin(f), nil })
-	if err != nil {
-		return 0.0, err
-	}
-
-	expression, err = calculate_1_value_expression(expression, OPERATOR_SINH, FUNCTION_VALUE_DIRECTION_RIGHT, func(f float64) (float64, error) { return math.Sinh(f), nil })
-	if err != nil {
-		return 0.0, err
-	}
-
-	expression, err = calculate_1_value_expression(expression, OPERATOR_COS, FUNCTION_VALUE_DIRECTION_RIGHT, func(f float64) (float64, error) { return math.Cos(f), nil })
-	if err != nil {
-		return 0.0, err
-	}
-
-	expression, err = calculate_1_value_expression(expression, OPERATOR_COSH, FUNCTION_VALUE_DIRECTION_RIGHT, func(f float64) (float64, error) { return math.Cosh(f), nil })
-	if err != nil {
-		return 0.0, err
-	}
-
-	expression, err = calculate_1_value_expression(expression, OPERATOR_TAN, FUNCTION_VALUE_DIRECTION_RIGHT, func(f float64) (float64, error) { return math.Tan(f), nil })
-	if err != nil {
-		return 0.0, err
-	}
-
-	expression, err = calculate_1_value_expression(expression, OPERATOR_TANH, FUNCTION_VALUE_DIRECTION_RIGHT, func(f float64) (float64, error) { return math.Tanh(f), nil })
-	if err != nil {
-		return 0.0, err
-	}
-
-	// calculate logarithms
-	expression, err = calculate_1_value_expression(expression, OPERATOR_LOG10, FUNCTION_VALUE_DIRECTION_RIGHT, func(f float64) (float64, error) { return math.Log10(f), nil })
-	if err != nil {
-		return 0.0, err
-	}
-
-	expression, err = calculate_1_value_expression(expression, OPERATOR_LN, FUNCTION_VALUE_DIRECTION_RIGHT, func(f float64) (float64, error) { return math.Log(f), nil })
-	if err != nil {
-		return 0.0, err
-	}
-
-	expression, err = calculate_2_value_expressions(expression, OPERATOR_LOGx, func(a, b float64) (float64, error) { return math.Log(a) / math.Log(b), nil })
-	if err != nil {
-		return 0.0, err
-	}
-
-	// calculate exponents and roots
-	expression, err = calculate_2_value_expressions(expression, OPERATOR_POW, func(a, b float64) (float64, error) { return math.Pow(a, b), nil })
-	if err != nil {
-		return 0.0, err
-	}
-
-	expression, err = calculate_2_value_expressions(expression, OPERATOR_ROOT, func(a, b float64) (float64, error) { return math.Pow(b, 1/a), nil })
-	if err != nil {
-		return 0.0, err
-	}
-
-	// calculate basic arithmetic
-	expression, err = calculate_2_value_expressions(expression, OPERATOR_DIVIDE, func(a, b float64) (float64, error) { return (a / b), nil })
-	if err != nil {
-		return 0.0, err
-	}
-
-	expression, err = calculate_2_value_expressions(expression, OPERATOR_MULTPILY, func(a, b float64) (float64, error) { return (a * b), nil })
-	if err != nil {
-		return 0.0, err
-	}
-
-	expression, err = calculate_2_value_expressions(expression, OPERATOR_SUBSTRACT, func(a, b float64) (float64, error) { return (a - b), nil })
-	if err != nil {
-		return 0.0, err
-	}
-
-	expression, err = calculate_2_value_expressions(expression, OPERATOR_ADD, func(a, b float64) (float64, error) { return (a + b), nil })
-	if err != nil {
-		return 0.0, err
-	}
-
-	//  Error Checks
-	if len(expression) != 1 {
-		return 0.0, errors.New("FINAL ANSWER NOT CALCULATED")
-	}
-
-	if expression[0].chr != NUMBER {
-		return 0.0, errors.New("VALUE MATH ERROR")
-	}
-
-	return expression[0].value, nil
-}
-
-func calculate_innermost_brackets(expression []Element, calculate_fn func([]Element) (float64, error)) ([]Element, error) {
-
-	// counters
-	var last_open_bracket = -1
-	var first_close_bracket = -1
-	var count_open_bracket = 0
-	var count_close_bracket = 0
-
-	for i := 0; i < len(expression); i++ {
-
-		// count brackets
-		if expression[i].chr == BRACKET_OPEN {
-			last_open_bracket = i
-			count_open_bracket += 1
-		} else if expression[i].chr == BRACKET_CLOSE {
-			count_close_bracket += 1
-			if first_close_bracket == -1 {
-				first_close_bracket = i
-			}
-		}
-
-		// Syntax error
-		if count_close_bracket > count_open_bracket {
-			return expression, errors.New("BRACKETS MISMATCH")
-		}
-
-		// when the number of open brackets and closing brackets match.
-		// 'last_open_bracket' is the start and 'first_close_bracket' is the end. for the calculation
-		if count_open_bracket == count_close_bracket && first_close_bracket != -1 {
-			var start = last_open_bracket + 1
-			var end = first_close_bracket
-			var bracket_expression = expression[start:end]
-			var value, err = calculate_fn(bracket_expression)
-			if err != nil {
-				return expression, err
-			}
-			expression[last_open_bracket].chr = NUMBER
-			expression[last_open_bracket].value = value
-
-			// remove all elements from last_open_bracket to first_close_bracket
-			list := []Element{}
-			for j := 0; j < len(expression); j++ {
-				if (j < last_open_bracket+1) || (j > first_close_bracket) {
-					list = append(list, expression[j])
-				}
-			}
-			return list, nil
-		}
-	}
-
-	return expression, nil
-}
-
-func containsBrackets(expression []Element) bool {
-	for i := 0; i < len(expression); i++ {
-		if expression[i].chr == BRACKET_OPEN {
-			return true
-		}
-	}
-	return false
-}
+// --- 8. Main CLI Loop ---
 
 func main() {
+	fmt.Println("--- Go CLI Calculator (Infix Mode) ---")
+	fmt.Println("Supported Operations:")
+	fmt.Println("  Binary: +, -, *, /, ^ (Power), r (Root: a r b = b-th root of a)")
+	fmt.Println("  Unary (Prefix): S, s, C, c, T, t, l, L (e.g., S30)")
+	fmt.Println("  Unary (Postfix): ! (Factorial, e.g., 6!)")
+	fmt.Println("  Constant: p (PI)")
+	fmt.Println("\nNOTE: Use explicit multiplication (e.g., 2*(3) is correct).")
+	fmt.Println("Type 'exit' or 'quit' to end.\n")
 
-	if len(os.Args) < 2 {
-		log.Fatal("PLEASE ADD AN EXPRESSION TO CALCULATE")
-	}
+	reader := bufio.NewReader(os.Stdin)
 
-	// construct expression for agruments e.g 1+1 +2 /4 *4
-	// whitesplaces are automatically handled by joining each argument
-	expression := []Element{}
+	for {
+		fmt.Print("Expression: ")
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(input)
 
-	// Get arguments from command line in expreesion
-	for i := 1; i < len(os.Args); i++ {
-		arg := os.Args[i]
-		for j := 0; j < len(arg); j++ {
-			if arg[j] != ' ' { // skip white space
-				var ele Element
-				ele.chr = rune(arg[j])
-				ele.digit_length = 0
-				ele.integers = 0
-				ele.value = 0.0
-				expression = append(expression, ele)
+		if input == "" || strings.ToLower(input) == "exit" || strings.ToLower(input) == "quit" {
+			break
+		}
+
+		// Use a panic/recover block to handle math domain errors (like log(-1))
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					fmt.Printf("Error: Runtime exception occurred. %v\n\n", r)
+				}
+			}()
+
+			result, err := Calculate(input)
+			if err != nil {
+				fmt.Printf("Error: Invalid expression. %v\n\n", err)
+				return
 			}
-
-		}
+			fmt.Printf("Result: **%.10f**\n\n", result)
+		}()
 	}
 
-	const MAX_ARRAY_SIZE = 200
-	if len(expression) >= MAX_ARRAY_SIZE {
-		log.Fatal("EXPRESSION TOO LONG")
-	}
-
-	expression, err := construct_numbers_from_string_of_integers(expression)
-	if err != nil {
-		log.Fatal("INVALID NUMBER FORMAT")
-	}
-
-	// calculate decimal numbers
-	expression, err = construct_decimal_numbers(expression)
-	if err != nil {
-		log.Fatal("INVALID DECIMAL NUMBER FORMAT")
-	}
-
-	// replace all PI symbols with value
-	for i := 0; i < len(expression); i++ {
-		if expression[i].chr == PI || expression[i].chr == 'π' {
-			expression[i].value = math.Pi
-			expression[i].chr = NUMBER
-			expression[i].integers = 3
-		}
-	}
-
-	// convert negative numbers
-	expression, err = convert_negative_numbers(expression)
-	if err != nil {
-		log.Fatal("INVALID NEGATIVE NUMBER FORMAT")
-	}
-
-	// while loop to check for brackets
-	for containsBrackets(expression) {
-		expression, err = calculate_innermost_brackets(expression, calculate_math)
-		if err != nil {
-			log.Fatal("BRACKET MATH ERROR")
-		}
-	}
-
-	// Calculate the remaining expression
-	value, err := calculate_math(expression)
-
-	if err != nil {
-		log.Fatal("MATH ERROR")
-	}
-
-	fmt.Println(value)
+	fmt.Println("Exiting calculator. Goodbye!")
 }

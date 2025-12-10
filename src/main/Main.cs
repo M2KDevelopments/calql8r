@@ -1,451 +1,413 @@
 using System;
-using System.Collections;
-using System.Linq; // Required for the Contains method
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.RegularExpressions;
+using System.Globalization;
 
-class CalQl8r
+public class CliCalculator
 {
-    static String DECIMAL_POINT = ".";
-    static String OPERATOR_ADD = "+";
-    static String OPERATOR_SUBSTRACT = "-";
-    static String OPERATOR_MULTPILY = "*";
-    static String OPERATOR_DIVIDE = "/";
-    static String OPERATOR_LOGx = "l";
-    static String OPERATOR_POW = "^";
-    static String OPERATOR_ROOT = "r";
-    static String OPERATOR_SIN = "S";
-    static String OPERATOR_SINH = "s";
-    static String OPERATOR_COS = "C";
-    static String OPERATOR_COSH = "c";
-    static String OPERATOR_TAN = "T";
-    static String OPERATOR_TANH = "t";
-    static String OPERATOR_LOG10 = "L";
-    static String OPERATOR_LN = "E";
-    static String OPERATOR_FACTORIAL = "!";
+    // --- 1. Operator and Function Definitions ---
 
-    static String PERMUTATIONS = "Y";
-    static String COMBINATIONS = "Z";
-
-    private enum EnumFunctionValueDirection { LEFT, RIGHT }
-
-
-    private static ArrayList? ConstructNumbersFromStringOfIntegers(ArrayList expression)
-    {
-        int start = -1;
-        int end = 0;
-        String[] numbers = { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9" };
-        for (int i = 0; i < expression!.Count; i++)
-        {
-            if (numbers.Contains(expression[i]!.ToString()))
-            {
-                if (start == -1) start = i;
-                end = i;
-                if ((end == expression!.Count - 1) && start != -1)
-                {
-                    try
-                    {
-                        var number = "";
-                        for(int j = start; j <= end; j++) {
-                            number += expression[j]!.ToString();
-                        }
-                        var value = int.Parse(number);
-                        expression[start] = value;
-                        for (int j = start + 1; j <= end; j++) {
-                            expression[j] = "";
-                        }
-                    }
-                    catch (Exception)
-                    {
-                        return null;
-                    }
-                }
-            }
-            else
-            {
-                if (start != -1)
-                {
-                    try
-                    {
-                        var number = "";
-                        for(int j = start; j <= end; j++) number += expression[j]!.ToString();
-                        var value = int.Parse(number);
-                        expression[start] = value;
-                        for (int j = start + 1; j <= end; j++) expression[j] = "";
-                    }
-                    catch (Exception)
-                    {
-                        return null;
-                    }
-                    start = -1;
-                }
-            }
-        }
-
-        while (expression!.Contains(""))
-        {
-            expression.Remove("");
-        }
-        return expression;
-    }
-
-    private static ArrayList? ConstructDecimalNumbers(ArrayList expression)
-    {
-        int i = 0;
-        while (i < expression!.Count)
-        {
-            if ((expression[i]!.ToString() == DECIMAL_POINT))
-            {
-                if (i == 0 && (i == expression!.Count - 1)) return null;
-                try
-                {
-                    var number = expression[i - 1] + "." + expression[i + 1];
-                    expression[i - 1] = double.Parse(number);
-                    expression!.RemoveAt(i);
-                    expression!.RemoveAt(i);
-                }
-                catch (Exception)
-                {
-                    return null;
-                }
-            }
-            else
-            {
-                i++;
-            }
-        }
-        return expression;
-    }
-
-    private static ArrayList? ConvertNegativeNumbers(ArrayList expression)
-    {
-        for (int i = 0; i < expression!.Count; i++)
-        {
-            if ((expression[i]!.ToString() == OPERATOR_SUBSTRACT))
-            {
-                if (i == (expression!.Count - 1)) return null;
-
-                if ((expression[i + 1]!.ToString() == OPERATOR_SUBSTRACT))
-                {
-                    // double negative
-                    expression[i] = OPERATOR_ADD;
-                    expression[i + 1] = "";
-                }
-                else if (i == 0 && expression[i + 1] is double)
-                {
-                    expression[i] = "";
-                    expression[i + 1] = (double)expression[i + 1]! * -1;
-                }
-                else if (i > 0 && (expression[i - 1] is double) && expression[i + 1] is double)
-                {
-                    expression[i] = "";
-                    expression[i + 1] = (double)expression[i + 1]! * -1;
-                }
-            }
-        }
-
-        while (expression!.Contains(""))
-        {
-            expression.Remove("");
-        }
-        return expression;
-    }
-
-    private static ArrayList? Calculate1ValueExpression(ArrayList? expression, String operation_symbol, EnumFunctionValueDirection direction, Func<double, double?> CalculationFunction)
-    {
-        int i = 0;
-        while (i < expression!.Count)
-        {
-            if ((expression[i]!.ToString() == operation_symbol))
-            {
-                if (i == 0 && direction == EnumFunctionValueDirection.LEFT)
-                {
-                    return null;
-                }
-                if (i == (expression!.Count - 1) && direction == EnumFunctionValueDirection.RIGHT)
-                {
-                    return null;
-                }
-                if (!(expression[i - 1] is double) && direction == EnumFunctionValueDirection.LEFT)
-                {
-                    return null;
-                }
-                if (!(expression[i + 1] is double) && direction == EnumFunctionValueDirection.RIGHT)
-                {
-                    return null;
-                }
-
-                double? result;
-                var s = expression[i + 1]?.ToString() ?? "";
-                if (direction == EnumFunctionValueDirection.LEFT)
-                {
-                    double num = double.Parse(s);
-                    result = CalculationFunction.Invoke(num);
-                    if (result == null) return null;
-                    // Remove unnecessary elements and update value
-                    expression[i - 1] = result;
-                    expression!.RemoveAt(i);
-                    i = i - 1;
-                }
-                else if (direction == EnumFunctionValueDirection.RIGHT)
-                {
-                    double num = double.Parse(s);
-                    result = CalculationFunction.Invoke(num);
-                    if (result == null) return null;
-                    // Remove unnecessary elements and update value
-                    expression[i] = result;
-                    expression!.RemoveAt(i + 1);
-                }
-                else
-                {
-                    i++;
-                }
-            }
-            else
-            {
-                i++;
-            }
-        }
-
-        return expression;
-    }
-
-    private static ArrayList? Calculate2ValueExpressions(ArrayList? expression, String operation_symbol, Func<double, double, double?> CalculationFunction)
-    {
-        int i = 0;
-        while (i < expression!.Count)
-        {
-            var c = expression[i]!.ToString();
-            if ((c == operation_symbol))
-            {
-                var prev_num = double.Parse(expression[i - 1]!.ToString()!);
-                var next_num = double.Parse(expression[i + 1]!.ToString()!);
-                var result = CalculationFunction.Invoke(prev_num, next_num);
-                if (result == null) return null;
-                // Remove unnecessary elements and update value
-                expression[i - 1] = result;
-                expression!.RemoveAt(i);
-                expression!.RemoveAt(i);
-                i = i - 1;
-            }
-            else
-            {
-                i++;
-            }
-        }
-        return expression;
-    }
-
-    private static double CalculateFactorial(double number)
-    {
-        if (number < 0) return 0.0;
-        if (number == 0) return 1.0;
-        if (number == 1) return 1.0;
-        if (number == 2) return 2.0;
-        int total = 1;
-        for (int n = 1; n <= number; n++) total *= n;
-        return total;
-    }
-
-    private static double? CalculatePermutation(double n, double r)
-    {
-        if (n < r || n < 0 || r < 0) return null;
-        return CalculateFactorial(n) / CalculateFactorial(n - r);
-    }
-
-    private static double? CalculateCombinations(double n, double r)
-    {
-        if (n < r || n < 0 || r < 0) return null;
-        return CalculateFactorial(n) / (CalculateFactorial(r) * CalculateFactorial(n - r));
-    }
-
-    private static double? CalculateMath(ArrayList expr)
-    {
-        try
-        {
-            // factorial and nPr and nCr
-            var expression = Calculate1ValueExpression(expr, CalQl8r.OPERATOR_FACTORIAL, EnumFunctionValueDirection.LEFT, num => CalculateFactorial(num));
-            if (expression == null) return null;
-
-            expression = Calculate2ValueExpressions(expression, CalQl8r.PERMUTATIONS, CalculatePermutation);
-            if (expression == null) return null;
-
-            expression = Calculate2ValueExpressions(expression, CalQl8r.COMBINATIONS, CalculateCombinations);
-            if (expression == null) return null;
-
-            // calculate trigonometry
-
-            expression = Calculate1ValueExpression(expression, CalQl8r.OPERATOR_SIN, EnumFunctionValueDirection.RIGHT, (number) => Math.Sin(number));
-            if (expression == null) return null;
-
-            expression = Calculate1ValueExpression(expression, CalQl8r.OPERATOR_SINH, EnumFunctionValueDirection.RIGHT, (number) => Math.Sinh(number));
-            if (expression == null) return null;
-
-            expression = Calculate1ValueExpression(expression, CalQl8r.OPERATOR_COS, EnumFunctionValueDirection.RIGHT, (number) => Math.Cos(number));
-            if (expression == null) return null;
-
-            expression = Calculate1ValueExpression(expression, CalQl8r.OPERATOR_COSH, EnumFunctionValueDirection.RIGHT, (number) => Math.Cosh(number));
-            if (expression == null) return null;
-
-            expression = Calculate1ValueExpression(expression, CalQl8r.OPERATOR_TAN, EnumFunctionValueDirection.RIGHT, (number) => Math.Tan(number));
-            if (expression == null) return null;
-
-            expression = Calculate1ValueExpression(expression, CalQl8r.OPERATOR_TANH, EnumFunctionValueDirection.RIGHT, (number) => Math.Tanh(number));
-            if (expression == null) return null;
-
-            // calculate logarithms
-            expression = Calculate1ValueExpression(expression, CalQl8r.OPERATOR_LOG10, EnumFunctionValueDirection.RIGHT, (number) => Math.Log(number) / Math.Log(10));
-            if (expression == null) return null;
-
-            expression = Calculate1ValueExpression(expression, CalQl8r.OPERATOR_LN, EnumFunctionValueDirection.RIGHT, (a) => Math.Log(a));
-            if (expression == null) return null;
-
-            expression = Calculate2ValueExpressions(expression, CalQl8r.OPERATOR_LOGx, (a, b) => Math.Log(a) / Math.Log(b));
-            if (expression == null) return null;
-
-            // calculate exponents and roots
-            expression = Calculate2ValueExpressions(expression, CalQl8r.OPERATOR_POW, (a, b) => Math.Pow(a, b));
-            if (expression == null) return null;
-
-            expression = Calculate2ValueExpressions(expression, CalQl8r.OPERATOR_ROOT, (a, b) => Math.Pow(b, 1 / a));
-            if (expression == null) return null;
-
-            // calculate basic arithmetic
-            expression = Calculate2ValueExpressions(expression, CalQl8r.OPERATOR_DIVIDE, (a, b) => a / b);
-            if (expression == null) return null;
-
-            expression = Calculate2ValueExpressions(expression, CalQl8r.OPERATOR_MULTPILY, (a, b) => a * b);
-            if (expression == null) return null;
-
-            expression = Calculate2ValueExpressions(expression, CalQl8r.OPERATOR_SUBSTRACT, (a, b) => a - b);
-            if (expression == null) return null;
-
-            expression = Calculate2ValueExpressions(expression, CalQl8r.OPERATOR_ADD, (a, b) => a + b);
-            if (expression == null) return null;
-
-            if (expression!.Count != 1) return null;
-            if (!(expression[0] is double)) return null;
-
-            return double.Parse(expression[0]!.ToString()!);
-        }
-        catch (Exception)
-        {
-            return null;
-        }
-    }
-
-    private static ArrayList? CalculateInnermostBrackets(ArrayList expression, Func<ArrayList, double?> Calculation)
-    {
-        int last_open_bracket = -1;
-        int first_close_bracket = -1;
-        int count_open_bracket = 0;
-        int count_close_bracket = 0;
-        for (int i = 0; i < expression!.Count; i++)
-        {
-            if ((expression[i]!.ToString() == "("))
-            {
-                last_open_bracket = i;
-                count_open_bracket += 1;
-            }
-            else if ((expression[i]!.ToString() == ")"))
-            {
-                count_close_bracket += 1;
-                if (first_close_bracket == -1)
-                {
-                    first_close_bracket = i;
-                }
-            }
-
-            // Syntax error
-            if (count_close_bracket > count_open_bracket) return null;
-
-            // when the number of open brackets and closing brackets match.
-            // 'last_open_bracket' is the start and 'first_close_bracket' is the end. for the calculation
-            if (count_open_bracket == count_close_bracket && (first_close_bracket != -1))
-            {
-                var start = last_open_bracket + 1;
-                var end = first_close_bracket;
-                var bracket_expression = new ArrayList();
-                for(int j = start; j < end; j++) {
-                    bracket_expression.Add(expression[j]);
-                }
- 
-                var value = Calculation(bracket_expression);
-                if (value == null) return null;
- 
-                expression[last_open_bracket] = value;
+    // Define custom function types for clarity
+    public delegate double BinaryFunction(double a, double b);
+    public delegate double UnaryFunction(double a);
     
-                // remove all elements from last_open_bracket to first_close_bracket
-                for (int j = last_open_bracket + 1; j <= first_close_bracket; j++)
-                {
-                    expression!.RemoveAt(last_open_bracket + 1);
-                }
-                return expression;
-            }
+    // Store all known operators and functions in a static dictionary for lookup
+    private static readonly Dictionary<string, OpFuncDef> Definitions = new Dictionary<string, OpFuncDef>();
+
+    private class OpFuncDef
+    {
+        public string Name { get; }
+        public int Precedence { get; }
+        public bool IsLeftAssociative { get; }
+        public int Arity { get; } // 1 for unary, 2 for binary
+        public Delegate Function { get; }
+
+        public OpFuncDef(string name, int precedence, bool isLeft, int arity, Delegate function)
+        {
+            Name = name;
+            Precedence = precedence;
+            IsLeftAssociative = isLeft;
+            Arity = arity;
+            Function = function;
+        }
+    }
+
+    // --- 2. Function Implementations ---
+    
+    // Binary Functions
+    private static double Add(double a, double b) => a + b;
+    private static double Subtract(double a, double b) => a - b;
+    private static double Multiply(double a, double b) => a * b;
+    private static double Divide(double a, double b) => a / b;
+    private static double Power(double a, double b) => Math.Pow(a, b);
+    
+    // Custom Root: a r b means b-th root of a. (Root degree is b)
+    private static double Root(double a, double b)
+    {
+        if (a < 0 && Math.Abs(b % 2.0) < double.Epsilon)
+            throw new ArgumentException("Cannot take even root of a negative number.");
+        return Math.Pow(a, 1.0 / b);
+    }
+    
+    // Unary Functions
+    private static double Sin(double a) => Math.Sin(a);
+    private static double SinH(double a) => Math.Sinh(a);
+    private static double Cos(double a) => Math.Cos(a);
+    private static double CosH(double a) => Math.Cosh(a);
+    private static double Tan(double a) => Math.Tan(a);
+    private static double TanH(double a) => Math.Tanh(a);
+    private static double Ln(double a) => Math.Log(a);
+    private static double Log10(double a) => Math.Log10(a);
+
+    // Unary Post-fix Factorial
+    private static double Factorial(double a)
+    {
+        if (a < 0 || Math.Abs(a % 1.0) > double.Epsilon)
+            throw new ArgumentException("Factorial only defined for non-negative integers.");
+        
+        long res = 1;
+        for (int i = 1; i <= (int)a; i++)
+        {
+            res *= i;
+        }
+        return (double)res;
+    }
+
+    // --- 3. Static Constructor for Definitions (similar to a lookup table) ---
+
+    static CliCalculator()
+    {
+        // Precedence: Higher number binds tighter
+        
+        // Postfix Unary (Highest)
+        Definitions.Add("!", new OpFuncDef("!", 6, true, 1, (UnaryFunction)Factorial)); 
+
+        // Prefix Unary Functions
+        // Note: Right Associative precedence 5
+        Definitions.Add("S", new OpFuncDef("S", 5, false, 1, (UnaryFunction)Sin));
+        Definitions.Add("s", new OpFuncDef("s", 5, false, 1, (UnaryFunction)SinH));
+        Definitions.Add("C", new OpFuncDef("C", 5, false, 1, (UnaryFunction)Cos));
+        Definitions.Add("c", new OpFuncDef("c", 5, false, 1, (UnaryFunction)CosH));
+        Definitions.Add("T", new OpFuncDef("T", 5, false, 1, (UnaryFunction)Tan));
+        Definitions.Add("t", new OpFuncDef("t", 5, false, 1, (UnaryFunction)TanH));
+        Definitions.Add("l", new OpFuncDef("l", 5, false, 1, (UnaryFunction)Ln));    // Ln
+        Definitions.Add("L", new OpFuncDef("L", 5, false, 1, (UnaryFunction)Log10)); // Log10
+
+        // Binary Operators
+        Definitions.Add("^", new OpFuncDef("^", 4, false, 2, (BinaryFunction)Power)); // Right Associative
+        Definitions.Add("r", new OpFuncDef("r", 4, true, 2, (BinaryFunction)Root));   // Left Associative
+
+        Definitions.Add("*", new OpFuncDef("*", 3, true, 2, (BinaryFunction)Multiply));
+        Definitions.Add("/", new OpFuncDef("/", 3, true, 2, (BinaryFunction)Divide));
+        
+        Definitions.Add("+", new OpFuncDef("+", 2, true, 2, (BinaryFunction)Add));
+        Definitions.Add("-", new OpFuncDef("-", 2, true, 2, (BinaryFunction)Subtract)); // Binary subtraction
+    }
+
+    // --- 4. Lexer/Tokenizer ---
+    
+    // Regular expression to break the string into tokens.
+    // This is complex to handle all cases (numbers, ops, funcs, parentheses).
+    private static readonly Regex TokenizerRegex = new Regex(
+        // Group 1: Numbers (integers or decimals)
+        @"(\d+(\.\d*)?|\.\d+)" +
+        // Group 2: Functions (S, s, C, c, T, t, l, L)
+        @"|([SsCcTtLl])" + 
+        // Group 3: Operators (^, *, /, r, +, -, !) 
+        // Note: The minus sign '-' is handled as an operator here.
+        @"|(\^|\*|/|r|\+|\-|!)" +
+        // Group 4: Parentheses and constant 'p'
+        @"|([()])" +
+        @"|(p)",
+        RegexOptions.Compiled | RegexOptions.IgnorePatternWhitespace);
+    
+    private static List<string> Tokenize(string expression)
+    {
+        // 1. Preprocess the expression to insert spaces around operators, 
+        //    but *not* break up numbers or function names.
+        // This is necessary because C#'s Regex MatchCollection doesn't handle overlapping matches well.
+        expression = expression.Replace(" ", "").Replace("p", " p ").Replace("(", " ( ").Replace(")", " ) ");
+
+        var tokens = new List<string>();
+        var matches = TokenizerRegex.Matches(expression);
+        
+        foreach (Match match in matches)
+        {
+            // Only capture the non-empty group value
+            tokens.Add(match.Value);
         }
 
-        return expression;
+        // The custom tokenizer is tricky in C# for this level of complexity.
+        // A simple approach: split by all recognized symbols while preserving the symbols.
+        var splitTokens = new List<string>();
+        string[] separators = { "(", ")", "+", "-", "*", "/", "^", "!", "r", "S", "s", "C", "c", "T", "t", "l", "L", "p" };
+
+        var current = expression;
+        
+        foreach (var sep in separators)
+        {
+            // Use a temporary list to rebuild the expression tokens after splitting
+            var tempTokens = new List<string>();
+            foreach (var part in current.Split(new[] { sep }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (part.Length > 0)
+                {
+                    tempTokens.Add(part);
+                    // Add the separator back in if it's not the last part
+                    if (!part.Equals(current.Split(new[] { sep }, StringSplitOptions.RemoveEmptyEntries).Last()) || current.EndsWith(sep))
+                    {
+                        // To avoid infinite loop for unary minus, we check if the separator 
+                        // should be added back based on the context.
+                    }
+                }
+            }
+            // A truly robust tokenizer requires state, but we can simplify by using a 
+            // cleaner replacement strategy to separate all tokens with spaces.
+        }
+        
+        // --- The robust tokenization is simplified for the single file requirement ---
+        // A manual replacement approach is more reliable here than a single Regex:
+        string spacedExpression = expression;
+        foreach (var op in separators.OrderByDescending(s => s.Length)) // Longer tokens first
+        {
+            // Avoid separating a minus sign used for a negative number if possible
+            if (op.Length == 1 && char.IsLetterOrDigit(op[0])) continue; // Skip functions/p for now
+            
+            spacedExpression = spacedExpression.Replace(op, $" {op} ");
+        }
+
+        // Handle functions and constant 'p'
+        foreach(var key in Definitions.Keys.Where(k => k.Length == 1))
+        {
+            // Must avoid double spacing
+            spacedExpression = spacedExpression.Replace($" {key} ", $" {key} ");
+            spacedExpression = spacedExpression.Replace(key, $" {key} ");
+        }
+        spacedExpression = spacedExpression.Replace("p", " p ");
+        
+        // Clean up multiple spaces and trim
+        tokens = spacedExpression
+            .Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
+            .ToList();
+        
+        // Handle Unary Minus: If '-' follows '(', an operator, or is the first token, it's unary.
+        for (int i = 0; i < tokens.Count; i++)
+        {
+            if (tokens[i] == "-")
+            {
+                bool isUnary = i == 0 || tokens[i - 1] == "(" || Definitions.ContainsKey(tokens[i - 1]);
+
+                if (isUnary)
+                {
+                    // Merge the unary minus with the following number or function (e.g., "-5" or "-S")
+                    if (i + 1 < tokens.Count)
+                    {
+                        tokens[i] = "-" + tokens[i + 1];
+                        tokens.RemoveAt(i + 1);
+                    }
+                }
+            }
+        }
+        
+        return tokens;
     }
 
 
-
-
-    static void Main(string[] args)
+    // --- 5. Shunting-Yard Algorithm (Infix to RPN) ---
+    
+    public static List<string> InfixToRpn(List<string> infixTokens)
     {
+        var outputQueue = new List<string>();
+        var operatorStack = new Stack<string>();
+        
+        foreach (var token in infixTokens)
+        {
+            // 1. If the token is a number or constant 'p', add it to the output queue.
+            if (double.TryParse(token, NumberStyles.Any, CultureInfo.InvariantCulture, out _) || token == "p")
+            {
+                outputQueue.Add(token);
+            }
+            // 2. If the token is a function
+            else if (Definitions.TryGetValue(token, out var def) && def.Arity == 1 && token != "!")
+            {
+                operatorStack.Push(token);
+            }
+            // 3. If the token is an operator
+            else if (Definitions.TryGetValue(token, out def) && def.Arity == 2)
+            {
+                while (operatorStack.Count > 0)
+                {
+                    var topToken = operatorStack.Peek();
+                    if (Definitions.TryGetValue(topToken, out var topDef))
+                    {
+                        // Check precedence and associativity
+                        if ((def.IsLeftAssociative && def.Precedence <= topDef.Precedence) ||
+                            (!def.IsLeftAssociative && def.Precedence < topDef.Precedence))
+                        {
+                            outputQueue.Add(operatorStack.Pop());
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                    else if (topToken == "(") // Stop if we hit a parenthesis
+                    {
+                        break;
+                    }
+                    else // Should only be a function on top (precedence check handles this)
+                    {
+                        break;
+                    }
+                }
+                operatorStack.Push(token);
+            }
+            // 4. If the token is a postfix operator '!'
+            else if (token == "!")
+            {
+                 outputQueue.Add(token); // Postfix operator immediately goes to output
+            }
+            // 5. If the token is '(', push it onto the operator stack.
+            else if (token == "(")
+            {
+                operatorStack.Push(token);
+            }
+            // 6. If the token is ')', pop operators to the output queue until '(' is found.
+            else if (token == ")")
+            {
+                while (operatorStack.Count > 0 && operatorStack.Peek() != "(")
+                {
+                    outputQueue.Add(operatorStack.Pop());
+                }
+                if (operatorStack.Count == 0)
+                    throw new ArgumentException("Mismatched parentheses in expression.");
+                
+                operatorStack.Pop(); // Pop the '('
+                
+                // If there is a function token at the top of the stack, pop it to the output queue.
+                if (operatorStack.Count > 0 && Definitions.ContainsKey(operatorStack.Peek()))
+                {
+                    outputQueue.Add(operatorStack.Pop());
+                }
+            }
+            else
+            {
+                throw new ArgumentException($"Invalid token found: {token}");
+            }
+        }
+        
+        // 7. Pop remaining operators from the stack to the output queue.
+        while (operatorStack.Count > 0)
+        {
+            var token = operatorStack.Pop();
+            if (token == "(")
+                throw new ArgumentException("Mismatched parentheses in expression.");
+            
+            outputQueue.Add(token);
+        }
+        
+        return outputQueue;
+    }
 
-        var expression = new ArrayList();
 
-        // construct expression for arguments e.g 1+1 +2 /4 *4
-        // white spaces are automatically handled by joining each argument
-        for (int i = 0; i < args.Length; i++) {
-            for (int j = 0; j < args[i].Length; j++) {
-                if (args[i][j] != ' '){
-                    expression.Add(args[i][j].ToString());
-                }                
+    // --- 6. RPN Evaluation ---
+    
+    public static double EvaluateRpn(List<string> rpnTokens)
+    {
+        var valueStack = new Stack<double>();
+
+        foreach (var token in rpnTokens)
+        {
+            // 1. If the token is a number or 'p', push the value onto the stack.
+            if (double.TryParse(token, NumberStyles.Any, CultureInfo.InvariantCulture, out double number))
+            {
+                valueStack.Push(number);
+            }
+            else if (token == "p")
+            {
+                valueStack.Push(Math.PI);
+            }
+            // 2. If the token is a function or operator.
+            else if (Definitions.TryGetValue(token, out var def))
+            {
+                if (def.Arity == 2) // Binary
+                {
+                    if (valueStack.Count < 2) throw new ArgumentException($"Binary operator '{token}' requires two operands.");
+                    double b = valueStack.Pop();
+                    double a = valueStack.Pop();
+                    valueStack.Push(((BinaryFunction)def.Function)(a, b));
+                }
+                else if (def.Arity == 1) // Unary (Prefix or Postfix)
+                {
+                    if (valueStack.Count < 1) throw new ArgumentException($"Unary operator '{token}' requires one operand.");
+                    double a = valueStack.Pop();
+                    valueStack.Push(((UnaryFunction)def.Function)(a));
+                }
+            }
+            else
+            {
+                throw new ArgumentException($"Unknown token during evaluation: {token}");
             }
         }
 
-        // create the number from string
-        expression = ConstructNumbersFromStringOfIntegers(expression);
-        if (expression == null) {
-            Console.WriteLine("INVALID NUMBER FORMAT");
-            return;
-        }
+        if (valueStack.Count != 1)
+            throw new ArgumentException("Invalid RPN expression (too many/few operands).");
 
-        // calculate decimal numbers
-        expression = ConstructDecimalNumbers(expression!);
-        if (expression == null) {
-            Console.WriteLine("INVALID DECIMAL NUMBER FORMAT");
-            return;
-        }
+        return valueStack.Pop();
+    }
 
-        // replace all PI symbols with value
-        string[] pis = {"π", "PI", "pi", "p"};
-        for (int i = 0; i < expression!.Count; i++) {
-            bool piExists = pis.Contains(expression[i]!.ToString());
-            if (piExists) expression[i] = Math.PI;
-        }
+    // --- 7. Main Execution Flow ---
+    
+    public static double Calculate(string expression)
+    {
+        var tokens = Tokenize(expression);
+        var rpn = InfixToRpn(tokens);
+        return EvaluateRpn(rpn);
+    }
+    
+    // --- 8. Main CLI Loop ---
+    
+    public static void Main(string[] args)
+    {
+        Console.WriteLine("--- C# CLI Calculator (Infix Mode) ---");
+        Console.WriteLine("Supported Operations:");
+        Console.WriteLine("  Binary: +, -, *, /, ^ (Power), r (Root: a r b = b-th root of a)");
+        Console.WriteLine("  Unary (Prefix): S, s, C, c, T, t, l, L (e.g., S 30)");
+        Console.WriteLine("  Unary (Postfix): ! (Factorial, e.g., 6!)");
+        Console.WriteLine("  Constant: p (PI)");
+        Console.WriteLine("\nNOTE: Use explicit multiplication where necessary (e.g., 2*(3) -> 2*(3)).");
+        Console.WriteLine("Type 'exit' or 'quit' to end.\n");
 
-        // convert negative numbers
-        expression = ConvertNegativeNumbers(expression!);
-        if (expression == null){
-            Console.WriteLine("INVALID NEGATIVE NUMBER FORMAT");
-            return;
-        }
+        while (true)
+        {
+            Console.Write("Expression: ");
+            string input = Console.ReadLine()?.Trim();
 
-        // Calculate inner bracket expressions
-        do {
-            expression = CalculateInnermostBrackets(expression, (list) => CalculateMath(list));
-            if (expression == null) {
-                Console.WriteLine("MATH ERROR");
-                return;
+            if (string.IsNullOrEmpty(input) || input.Equals("exit", StringComparison.OrdinalIgnoreCase) || input.Equals("quit", StringComparison.OrdinalIgnoreCase))
+            {
+                break;
             }
-        } while (expression!.Contains("("));
 
-        var value = CalculateMath(expression);
-        if (value == null)  {
-            Console.WriteLine("MATH ERROR");
-            return;
+            try
+            {
+                double result = Calculate(input);
+                Console.WriteLine($"Result: **{result:F10}**\n");
+            }
+            catch (ArgumentException ex)
+            {
+                Console.WriteLine($"Error: Invalid expression. {ex.Message}\n");
+            }
+            catch (DivideByZeroException)
+            {
+                Console.WriteLine("Error: Division by zero.\n");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"An unexpected error occurred: {ex.Message}\n");
+            }
         }
 
-        Console.WriteLine(value);
+        Console.WriteLine("Exiting calculator. Goodbye!");
     }
 }

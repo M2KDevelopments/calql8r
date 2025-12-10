@@ -1,367 +1,277 @@
-import sys
 import math
-import numbers
-from typing import Callable
+import re
+import sys
 
-FUNCTION_VALUE_DIRECTION_RIGHT = 1
-FUNCTION_VALUE_DIRECTION_LEFT = -1
-DECIMAL_POINT= '.'
+# --- 1. Operator and Function Definitions ---
 
-OPERATOR_ADD= '+'
-OPERATOR_SUBSTRACT= '-'
-OPERATOR_MULTPILY= '*'
-OPERATOR_DIVIDE= '/'
-OPERATOR_LOGx = 'l'
-OPERATOR_POW= '^'
-OPERATOR_ROOT= 'r'
-OPERATOR_SIN= 'S'
-OPERATOR_SINH= 's'
-OPERATOR_COS= 'C'
-OPERATOR_COSH= 'c'
-OPERATOR_TAN= 'T'
-OPERATOR_TANH= 't'
-OPERATOR_LOG10= 'L'
-OPERATOR_LN= 'E'
-OPERATOR_FACTORIAL= '!'
-# PI= 'p'
-# BRACKET_OPEN= '('
-# BRACKET_CLOSE= ')'
-FACTORIAL= '!'
-PERMUTATIONS= 'Y'
-COMBINATIONS= 'Z'
+class OpFuncDef:
+    """Represents an operator or function with its properties."""
+    def __init__(self, name, precedence, is_left_associative, arity, func):
+        self.name = name
+        self.precedence = precedence
+        self.is_left_associative = is_left_associative
+        self.arity = arity  # 1 for unary, 2 for binary
+        self.func = func    # The actual Python function
 
-def construct_numbers_from_string_of_integers(expression:list):
-    start = -1
-    end = 0
-    for i in range(0, len(expression)):
-        if expression[i] in ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']:
-            if start == -1:
-                start = i
-            end = i
-            if (end == len(expression) - 1) and (start != -1):
-                try:
-                    num = int("".join(expression[start: end+1]))
-                    expression[start] = num
-                    for j in range(start+1, end+1):
-                        expression[j] = ''
-                    start = -1
-                except:
-                    return None
-        else:
-            if start != -1:
-                try:
-                    num = int("".join(expression[start: end+1]))
-                    expression[start] = num
-                    for j in range(start + 1, end+1):
-                        expression[j] = ''
-                    start = -1
-                except:
-                    return None
+# Global static map for all known operators and functions
+DEFINITIONS = {}
 
-    # remove all blank space
-    for i in range(expression.count('')):
-        expression.remove('')
+# --- 2. Function Implementations ---
 
-    return expression
+# Custom Root: a r b means b-th root of a. (Root degree is b)
+def _root(a, b):
+    if a < 0 and b % 2.0 == 0.0:
+        raise ValueError("Cannot take even root of a negative number.")
+    return a ** (1.0 / b)
 
+# Unary Post-fix Factorial
+def _factorial(a):
+    if a < 0 or a % 1.0 != 0.0:
+        raise ValueError("Factorial only defined for non-negative integers.")
+    return math.factorial(int(a))
 
-def construct_decimal_numbers(expression: list):
-    i = 0
-    while i < len(expression):
-        if expression[i] == DECIMAL_POINT:
-            # boundary check for decimal point
-            if i == 0 or i == len(expression) - 1:
-                return None
-            try:
-                expression[i-1] = float(f"{expression[i-1]}.{expression[i+1]}")
-                expression.pop(i)  # decimal point
-                expression.pop(i)  # next number
-            except:
-                return None
-        else:
-            i += 1
-    return expression
+# --- 3. Static Initialization ---
 
+def initialize_definitions():
+    """Initializes the static function definitions map."""
+    global DEFINITIONS
+    if DEFINITIONS:
+        return
 
-def convert_negative_numbers(expression: list):
-    # e.g -1+2, 2*(-1), -2*-1/2--1*(-3-2) (1-2)-13
-    for i in range(0, len(expression)):
-        if expression[i] == OPERATOR_SUBSTRACT:
-            if i == len(expression) - 1:  # boundary check for minus
-                return None
-            if (expression[i+1] == OPERATOR_SUBSTRACT):  # double negative
-                expression[i] = OPERATOR_ADD
-                expression[i+1] = ''
-            elif i == 0 and isinstance(expression[i+1], numbers.Number):
-                expression[i] = ''
-                expression[i+1] *= -1
-            elif i > 0 and isinstance(expression[i-1], numbers.Number) == False and isinstance(expression[i+1], numbers.Number):
-                expression[i] = ''
-                expression[i+1] *= -1
-
-    # remove all blank space
-    for i in range(expression.count('')):
-        expression.remove('')
-    return expression
-
-
-def calculate_1_value_expression(expression: list, operation_symbol: str, direction: int, calculation_function: Callable[[numbers.Number], numbers.Number]) -> list:
-    i = 0
-    while i < len(expression):
-        if expression[i] == operation_symbol:
-            # boundary check for operation symbol
-            if i == 0 and direction == FUNCTION_VALUE_DIRECTION_LEFT:
-                return None
-            
-            if (i == (len(expression) - 1)) and direction == FUNCTION_VALUE_DIRECTION_RIGHT :
-                return None
-
-            if isinstance(expression[i-1], numbers.Number) == False and direction == FUNCTION_VALUE_DIRECTION_LEFT:
-                return None
-            
-            if isinstance(expression[i+1], numbers.Number) == False and direction == FUNCTION_VALUE_DIRECTION_RIGHT:
-                return None
-
-            result = None
-            if direction == FUNCTION_VALUE_DIRECTION_LEFT:
-                result = calculation_function(expression[i-1])
-                
-                if result == None or isinstance(result, numbers.Number) == False:
-                    return None
-                
-                # Remove unnecessary elements and update value
-                expression[i-1] = result
-                expression.pop(i)
-                i = i-1
-            elif direction == FUNCTION_VALUE_DIRECTION_RIGHT:
-                result = calculation_function(expression[i+1])
-     
-                if result == None or isinstance(result, numbers.Number) == False:
-                    return None
-
-                # Remove unnecessary elements and update value
-                expression[i] = result
-                expression.pop(i+1)
-            else:
-                i += 1
-        else:
-            i += 1
-    return expression
-
-
-def calculate_2_value_expressions(expression: list, operation_symbol: str, calculation_function: Callable[[numbers.Number, numbers.Number], numbers.Number]) -> list:
-    i = 0
-    while i < len(expression):
-        if expression[i] == operation_symbol:
-            # boundary check for operation symbol
-            if i == 0 or i == len(expression) - 1:
-                return None
-
-            if isinstance(expression[i-1], numbers.Number) == False or isinstance(expression[i+1], numbers.Number) == False:
-                return None
-
-            result = calculation_function(expression[i-1], expression[i+1])
-            if result == None or isinstance(result, numbers.Number) == False:
-                return None
-
-            expression[i-1] = result
-            expression.pop(i)
-            expression.pop(i)
-            i = i-1
-        else:
-            i += 1
-    return expression
-
-
-def calculate_math(expression:list) -> numbers.Number:
-    try:
-        
-        # factorial and nPr and nCr 
-        expression =  calculate_1_value_expression(expression, OPERATOR_FACTORIAL, FUNCTION_VALUE_DIRECTION_LEFT, lambda num: math.factorial(num))
-        if(expression == None) : 
-            return None
-        
-        expression =  calculate_2_value_expressions(expression, PERMUTATIONS, lambda n, r: math.perm(n, r))
-        if(expression == None) : 
-            return None
-        
-
-        expression =  calculate_2_value_expressions(expression, COMBINATIONS, lambda n, r: math.comb(n, r))
-        if(expression == None) : 
-            return None
-
-        # calculate trigonometry
-        
-        expression =  calculate_1_value_expression(expression, OPERATOR_SIN, FUNCTION_VALUE_DIRECTION_RIGHT, lambda num: math.sin(num))
-        if(expression == None) : 
-            return None
-        
-        expression =  calculate_1_value_expression(expression, OPERATOR_SINH, FUNCTION_VALUE_DIRECTION_RIGHT, lambda num: math.sinh(num))
-        if(expression == None) : 
-            return None
-        
-        expression =  calculate_1_value_expression(expression, OPERATOR_COS, FUNCTION_VALUE_DIRECTION_RIGHT, lambda num: math.cos(num))
-        if(expression == None) : 
-            return None
-        
-        expression =  calculate_1_value_expression(expression, OPERATOR_COSH, FUNCTION_VALUE_DIRECTION_RIGHT, lambda num: math.cosh(num))
-        if(expression == None) : 
-            return None
-        
-        expression =  calculate_1_value_expression(expression, OPERATOR_TAN, FUNCTION_VALUE_DIRECTION_RIGHT, lambda num: math.tan(num))
-        if(expression == None) : 
-            return None
-        
-        expression =  calculate_1_value_expression(expression, OPERATOR_TANH, FUNCTION_VALUE_DIRECTION_RIGHT, lambda num: math.tanh(num))
-        if(expression == None) : 
-            return None
-
-        
-        # calculate logarithms
-        expression =  calculate_1_value_expression(expression, OPERATOR_LOG10, FUNCTION_VALUE_DIRECTION_RIGHT, lambda num: math.log10(num))
-        if(expression == None) : 
-            return None
-        
-        expression =  calculate_1_value_expression(expression, OPERATOR_LN, FUNCTION_VALUE_DIRECTION_RIGHT, lambda num: math.log(num))
-        if(expression == None) : 
-            return None
-        
-        expression =  calculate_2_value_expressions(expression, OPERATOR_LOGx, lambda a, b: math.log(b, a))
-        if(expression == None) : 
-            return None
-
-        
-        # calculate exponents and roots    
-        expression =  calculate_2_value_expressions(expression, OPERATOR_POW, lambda base, exp: math.pow(base, exp))
-        if(expression == None) : 
-            return None
-        
-        expression =  calculate_2_value_expressions(expression, OPERATOR_ROOT, lambda a, b: math.pow(b, 1/a))
-        if(expression == None) : 
-            return None
+    # Precedence: Higher number binds tighter
     
-        # calculate basic arithmitic    
-        expression = calculate_2_value_expressions(expression, OPERATOR_DIVIDE, lambda a, b: a / b)
-        if(expression == None) : 
-            return None
-        
-        expression =  calculate_2_value_expressions(expression, OPERATOR_MULTPILY, lambda a, b: a * b)
-        if(expression == None) : 
-            return None
-        
-        expression =  calculate_2_value_expressions(expression, OPERATOR_SUBSTRACT, lambda a, b: a - b)
-        if(expression == None) : 
-            return None
-        
+    # Postfix Unary (Highest Precedence)
+    DEFINITIONS["!"] = OpFuncDef("!", 6, True, 1, _factorial) 
 
-        expression =  calculate_2_value_expressions(expression, OPERATOR_ADD, lambda a, b: a + b)
-        if(expression == None) : 
-            return None
-        
-        if(len(expression) != 1):
-            return None
-        if(isinstance(expression[0], numbers.Number) == False):
-            return None
-        
-        
-        value : numbers.Number = expression[0]
-        return value
-    except:
-        return None
+    # Prefix Unary Functions (Right Associative precedence 5)
+    DEFINITIONS["S"] = OpFuncDef("S", 5, False, 1, math.sin)
+    DEFINITIONS["s"] = OpFuncDef("s", 5, False, 1, math.sinh)
+    DEFINITIONS["C"] = OpFuncDef("C", 5, False, 1, math.cos)
+    DEFINITIONS["c"] = OpFuncDef("c", 5, False, 1, math.cosh)
+    DEFINITIONS["T"] = OpFuncDef("T", 5, False, 1, math.tan)
+    DEFINITIONS["t"] = OpFuncDef("t", 5, False, 1, math.tanh)
+    DEFINITIONS["l"] = OpFuncDef("l", 5, False, 1, math.log)    # Ln (Natural Log)
+    DEFINITIONS["L"] = OpFuncDef("L", 5, False, 1, math.log10) # Log10
 
+    # Binary Operators
+    DEFINITIONS["^"] = OpFuncDef("^", 4, False, 2, math.pow) # Right Associative
+    DEFINITIONS["r"] = OpFuncDef("r", 4, True, 2, _root)    # Left Associative
 
-def calculate_innermost_brackets(expression:list, calculate_math: Callable[[list], numbers.Number]= calculate_math) -> list:
-    last_open_bracket = -1
-    first_close_bracket = -1
-    count_open_bracket = 0
-    count_close_bracket = 0
-    for i in range(0, len(expression)):
-        if expression[i] == '(':
-            last_open_bracket = i
-            count_open_bracket += 1
-        elif expression[i] == ')':
-            count_close_bracket += 1
-            if (first_close_bracket == -1):
-                first_close_bracket = i
+    DEFINITIONS["*"] = OpFuncDef("*", 3, True, 2, lambda a, b: a * b)
+    DEFINITIONS["/"] = OpFuncDef("/", 3, True, 2, lambda a, b: a / b)
+    
+    DEFINITIONS["+"] = OpFuncDef("+", 2, True, 2, lambda a, b: a + b)
+    # Internal token '_' for binary subtraction, distinguishing it from unary minus.
+    DEFINITIONS["_"] = OpFuncDef("-", 2, True, 2, lambda a, b: a - b) 
 
-        if (count_close_bracket > count_open_bracket):
-            return None
+# --- 4. Lexer/Tokenizer ---
 
-        # when the number of open brackets and closing brackets match.
-        # 'last_open_bracket' is the start and 'first_close_bracket' is the end. for the calculation
-        if (count_open_bracket == count_close_bracket and (first_close_bracket != -1)):
+def _is_number_or_constant(s):
+    """Checks if a string is a number or the constant 'p'."""
+    if s == "p": return True
+    try:
+        float(s)
+        return True
+    except ValueError:
+        return False
 
-            # generate expression that is found in inner most brackets
-            bracket_expression = expression[last_open_bracket +
-                                            1: first_close_bracket]
-            value = calculate_math(bracket_expression)
-            if value == None:
-                return None
+def _tokenize(expression):
+    """Converts the raw input string into a list of tokens, handling unary minus."""
+    expression = expression.replace(' ', '')
+    
+    # 1. Separate all single-character tokens (functions, operators, parentheses, constant 'p')
+    # Use a regex to look for all these characters, inserting spaces around them.
+    # Note: We must handle '-' separately to avoid incorrect separation of negative numbers.
+    token_pattern = r'([SsCcTtLl\^\*\/\!\(\)r]|\d+\.?\d*|\.\d+|p)'
+    
+    # Insert spaces around all relevant symbols except the minus sign initially
+    processed = expression
+    for sep in list("()^*/!rSsCcTtLl"):
+        processed = processed.replace(sep, f' {sep} ')
+    processed = processed.replace("p", ' p ')
+    
+    # Clean up multiple spaces and split
+    tokens = [t for t in processed.split() if t]
+
+    # 2. Handle Unary Minus vs. Binary Minus
+    result_tokens = []
+    
+    for i, token in enumerate(tokens):
+        if token == "-":
+            # Check if the preceding token is an operand (number, constant, '!', or ')')
+            is_preceding_token_operand = result_tokens and \
+                (_is_number_or_constant(result_tokens[-1]) or result_tokens[-1] in ("!", ")"))
             
-            expression[last_open_bracket] = value
+            if i == 0 or not is_preceding_token_operand:
+                # Unary Minus: Merge it with the next token (e.g., "-5")
+                if i + 1 < len(tokens):
+                    tokens[i + 1] = token + tokens[i + 1]
+                # Skip the current token as it's merged into the next
+            else:
+                # Binary Minus: Use the internal token '_'
+                result_tokens.append("_")
+        elif token == "+":
+            # Treat '+' as a binary operator always, unary '+' is redundant
+            result_tokens.append("+")
+        else:
+            result_tokens.append(token)
+            
+    return result_tokens
 
-            # remove all elements from last_open_bracket to first_close_bracket
-            for j in range(last_open_bracket + 1, first_close_bracket+1):
-                index = last_open_bracket + 1
-                expression.pop(index)
 
-            return expression
+# --- 5. Shunting-Yard Algorithm (Infix to RPN) ---
 
-    return expression
+def _infix_to_rpn(infix_tokens):
+    """Converts a list of infix tokens to a list of RPN tokens."""
+    output_queue = []
+    operator_stack = []
+    
+    for token in infix_tokens:
+        # 1. Number or constant 'p'
+        if _is_number_or_constant(token):
+            output_queue.append(token)
+        # 2. Function or prefix unary operator (not '!')
+        elif token in DEFINITIONS and DEFINITIONS[token].arity == 1 and token != "!":
+            operator_stack.append(token)
+        # 3. Binary operator ('_' is binary subtraction)
+        elif token in DEFINITIONS and DEFINITIONS[token].arity == 2:
+            current_def = DEFINITIONS[token]
+            
+            while operator_stack:
+                top_token = operator_stack[-1]
+                if top_token == "(": break
 
+                top_def = DEFINITIONS.get(top_token)
+                if top_def is None: break 
+                
+                # Check precedence and associativity
+                is_higher_precedence = current_def.precedence < top_def.precedence
+                is_same_precedence_left_assoc = current_def.precedence == top_def.precedence and current_def.is_left_associative
+
+                if is_higher_precedence or is_same_precedence_left_assoc:
+                    output_queue.append(operator_stack.pop())
+                else:
+                    break
+            operator_stack.append(token)
+        # 4. Postfix operator '!'
+        elif token == "!":
+             output_queue.append(token)
+        # 5. If the token is '('
+        elif token == "(":
+            operator_stack.append(token)
+        # 6. If the token is ')'
+        elif token == ")":
+            while operator_stack and operator_stack[-1] != "(":
+                output_queue.append(operator_stack.pop())
+            if not operator_stack:
+                raise ValueError("Mismatched parentheses in expression: missing '('")
+            
+            operator_stack.pop() # Pop the '('
+            
+            # Pop function if one is above '('
+            if operator_stack and operator_stack[-1] in DEFINITIONS:
+                output_queue.append(operator_stack.pop())
+        else:
+            raise ValueError(f"Invalid token found during parsing: {token}")
+
+    # 7. Pop remaining operators
+    while operator_stack:
+        token = operator_stack.pop()
+        if token == "(":
+            raise ValueError("Mismatched parentheses in expression: missing ')'")
+        
+        output_queue.append(token)
+    
+    return output_queue
+
+# --- 6. RPN Evaluation ---
+
+def _evaluate_rpn(rpn_tokens):
+    """Evaluates a list of RPN tokens."""
+    value_stack = []
+
+    for token in rpn_tokens:
+        # 1. Number or 'p'
+        if _is_number_or_constant(token):
+            if token == "p":
+                value_stack.append(math.pi)
+            else:
+                value_stack.append(float(token))
+        # 2. Function or operator
+        elif token in DEFINITIONS:
+            def_ = DEFINITIONS[token]
+            
+            if def_.arity == 2: # Binary
+                if len(value_stack) < 2: raise ValueError(f"Binary operator '{def_.name}' requires two operands.")
+                b = value_stack.pop()
+                a = value_stack.pop()
+                value_stack.append(def_.func(a, b))
+            
+            elif def_.arity == 1: # Unary
+                if not value_stack: raise ValueError(f"Unary operator '{def_.name}' requires one operand.")
+                a = value_stack.pop()
+                value_stack.append(def_.func(a))
+        else:
+            raise ValueError(f"Unknown token during evaluation: {token}")
+
+        # Check for math domain errors (NaN, Infinity)
+        if value_stack and (math.isnan(value_stack[-1]) or math.isinf(value_stack[-1])):
+            raise ArithmeticError("Math domain error (e.g., log(-1)) or division by zero.")
+
+    if len(value_stack) != 1:
+        raise ValueError("Invalid RPN expression (too many/few operands).")
+
+    return value_stack[0]
+
+# --- 7. Main Execution Flow ---
+
+def calculate(expression):
+    """Main function to calculate the result of an infix expression string."""
+    initialize_definitions()
+    
+    if not expression or not expression.strip():
+        raise ValueError("Expression cannot be empty.")
+    
+    tokens = _tokenize(expression)
+    rpn = _infix_to_rpn(tokens)
+    
+    # RPN DEBUG: print(f"RPN: {rpn}") 
+    
+    return _evaluate_rpn(rpn)
+
+# --- 8. Main CLI Loop ---
 
 def main():
+    """Runs the command line interface loop."""
+    print("--- Python CLI Calculator (Infix Mode) ---")
+    print("Supported Operations:")
+    print("  Binary: +, -, *, /, ^ (Power), r (Root: a r b = b-th root of a)")
+    print("  Unary (Prefix): S, s, C, c, T, t, l, L (e.g., S30)")
+    print("  Unary (Postfix): ! (Factorial, e.g., 6!)")
+    print("  Constant: p (PI)")
+    print("\nNOTE: Use explicit multiplication (e.g., 2*(3) is correct).")
+    print("Type 'exit' or 'quit' to end.\n")
 
+    while True:
+        try:
+            input_str = input("Expression: ")
+        except EOFError:
+            break
+        
+        expression = input_str.strip()
 
-    if len(sys.argv) <= 1:
-        return print("PLEASE ADD AN EXPRESSION TO CALCULATE")
+        if not expression or expression.lower() in ('exit', 'quit'):
+            break
 
+        try:
+            result = calculate(expression)
+            print(f"Result: **{result:.10f}**\n")
+        except (ValueError, ArithmeticError, TypeError) as ex:
+            print(f"Error: Invalid expression. {ex}\n")
+        except Exception as ex:
+            print(f"An unexpected error occurred: {ex}\n")
 
-    # construct expression for agruments e.g 1+1 +2 /4 *4
-    # whitesplaces are automatically handled by joining each argument
-    expression = []
-    for i in range(1, len(sys.argv)):
-        arg = sys.argv[i]
-        for j in range(0, len(arg)):
-            if arg[j] != ' ':
-                expression.append(arg[j])
-
-
-    expression = construct_numbers_from_string_of_integers(expression)
-    if (expression == None):
-        return print("INVALID NUMBER FORMAT")
-
-
-    # calculate decimal numbers
-    expression = construct_decimal_numbers(expression)
-    if (expression == None):
-        return print("INVALID DECIMAL NUMBER FORMAT")
-
-
-    # replace all PI symbols with value
-    for i in range(0, len(expression)):
-        if expression[i] in ['π', 'PI', 'pi', 'p']:
-            expression[i] = math.pi
-
- 
-    # convert negative numbers
-    expression = convert_negative_numbers(expression)
-    if (expression == None):
-        return print("INVALID NEGATIVE NUMBER FORMAT")
-    
-    
-    # Calculate inner bracket expressions
-    while expression.count('('):
-        expression = calculate_innermost_brackets(expression, calculate_math)
-        if (expression == None):
-            return print("MATH ERROR")
-    
-    # Calculate final expression
-    value = calculate_math(expression)
-    if (value == None):
-        return print("MATH ERROR")
-      
-    print(value)
+    print("Exiting calculator. Goodbye!")
 
 if __name__ == "__main__":
     main()

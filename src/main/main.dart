@@ -1,383 +1,306 @@
+import 'dart:io';
 import 'dart:math';
 
-// Constamts
-const DECIMAL_POINT = '.';
-const OPERATOR_ADD = '+';
-const OPERATOR_SUBSTRACT = '-';
-const OPERATOR_MULTPILY = '*';
-const OPERATOR_DIVIDE = '/';
-const OPERATOR_LOGx = 'l';
-const OPERATOR_POW = '^';
-const OPERATOR_ROOT = 'r';
-const OPERATOR_SIN = 'S';
-const OPERATOR_SINH = 's';
-const OPERATOR_COS = 'C';
-const OPERATOR_COSH = 'c';
-const OPERATOR_TAN = 'T';
-const OPERATOR_TANH = 't';
-const OPERATOR_LOG10 = 'L';
-const OPERATOR_LN = 'E';
-const OPERATOR_FACTORIAL = '!';
+// --- 1. Operator and Function Definitions ---
 
-const FACTORIAL = '!';
-const PERMUTATIONS = 'Y';
-const COMBINATIONS = 'Z';
+// Define custom function types for clarity
+typedef BinaryFunction = double Function(double a, double b);
+typedef UnaryFunction = double Function(double a);
 
-enum EnumFunctionValueDirection { LEFT, RIGHT }
+/// Represents an operator or function with its properties.
+class OpFuncDef {
+  final String name;
+  final int precedence;
+  final bool isLeftAssociative;
+  final int arity; // 1 for unary, 2 for binary
+  final Function function;
 
-List<dynamic>? construct_numbers_from_string_of_integers(
-    List<dynamic> expression) {
-  int start = -1;
-  int end = 0;
-  for (int i = 0; i < expression.length; i++) {
-    const numbers = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+  OpFuncDef(this.name, this.precedence, this.isLeftAssociative, this.arity, this.function);
+}
 
-    if (numbers.contains(expression[i])) {
-      if (start == -1) start = i;
-      end = i;
-      if ((end == expression.length - 1) && start != -1) {
-        try {
-          var number = expression.getRange(start, end + 1).join("");
-          var value = int.parse(number);
-          expression[start] = value;
-          for (int j = start + 1; j <= end; j++) expression[j] = '';
-        } catch (e) {
-          return null;
+// Global static map for all known operators and functions
+final Map<String, OpFuncDef> definitions = {};
+
+// --- 2. Function Implementations ---
+
+// Binary Functions
+double _add(double a, double b) => a + b;
+double _subtract(double a, double b) => a - b;
+double _multiply(double a, double b) => a * b;
+double _divide(double a, double b) => a / b;
+double _power(double a, double b) => pow(a, b).toDouble();
+
+// Custom Root: a r b means b-th root of a. (Root degree is b)
+double _root(double a, double b) {
+  if (a < 0 && b % 2.0 == 0.0) {
+    throw ArgumentError('Cannot take even root of a negative number.');
+  }
+  return pow(a, 1.0 / b).toDouble();
+}
+
+// Unary Functions
+double _sin(double a) => sin(a);
+double _sinh(double a) => asin(a);
+double _cos(double a) => cos(a);
+double _cosh(double a) => acos(a);
+double _tan(double a) => tan(a);
+double _tanh(double a) => atan(a);
+double _ln(double a) => log(a); // Natural log
+double _log10(double a) => log(a) / log(10); // Base 10 log
+
+// Unary Post-fix Factorial
+double _factorial(double a) {
+  if (a < 0 || a % 1.0 != 0.0) {
+    throw ArgumentError('Factorial only defined for non-negative integers.');
+  }
+  if (a == 0) return 1.0;
+  
+  int res = 1;
+  for (int i = 1; i <= a.toInt(); i++) {
+    res *= i;
+  }
+  return res.toDouble();
+}
+
+/// Initializes the static function definitions map.
+void _initializeDefinitions() {
+  if (definitions.isNotEmpty) return;
+
+  // Precedence: Higher number binds tighter
+  
+  // Postfix Unary (Highest Precedence)
+  definitions['!'] = OpFuncDef('!', 6, true, 1, _factorial); 
+
+  // Prefix Unary Functions (Right Associative precedence 5)
+  definitions['S'] = OpFuncDef('S', 5, false, 1, _sin);
+  definitions['s'] = OpFuncDef('s', 5, false, 1, _sinh);
+  definitions['C'] = OpFuncDef('C', 5, false, 1, _cos);
+  definitions['c'] = OpFuncDef('c', 5, false, 1, _cosh);
+  definitions['T'] = OpFuncDef('T', 5, false, 1, _tan);
+  definitions['t'] = OpFuncDef('t', 5, false, 1, _tanh);
+  definitions['l'] = OpFuncDef('l', 5, false, 1, _ln);    // Ln
+  definitions['L'] = OpFuncDef('L', 5, false, 1, _log10); // Log10
+
+  // Binary Operators
+  definitions['^'] = OpFuncDef('^', 4, false, 2, _power);  // Right Associative
+  definitions['r'] = OpFuncDef('r', 4, true, 2, _root);    // Root (Left Associative)
+
+  definitions['*'] = OpFuncDef('*', 3, true, 2, _multiply);
+  definitions['/'] = OpFuncDef('/', 3, true, 2, _divide);
+  
+  definitions['+'] = OpFuncDef('+', 2, true, 2, _add);
+  definitions['&'] = OpFuncDef('-', 2, true, 2, _subtract); // Use '&' temporarily for binary subtract
+}
+
+// --- 3. Lexer/Tokenizer ---
+
+/// Converts the raw input string into a list of tokens.
+List<String> _tokenize(String expression) {
+  // 1. Prepare separators for splitting.
+  // We use a list of all symbols and functions
+  const List<String> separators = [
+    '(', ')', '+', '-', '*', '/', '^', '!', 'r', 
+    'S', 's', 'C', 'c', 'T', 't', 'l', 'L', 'p'
+  ];
+
+  // 2. Insert spaces around all separators to facilitate splitting,
+  //    but first, replace binary minus with a placeholder ('&') 
+  //    to distinguish it from unary minus.
+  String processed = expression.replaceAll(' ', '');
+  
+  // Simple pass to separate all tokens
+  for (final sep in separators) {
+    processed = processed.replaceAll(sep, ' $sep ');
+  }
+  
+  // Clean up multiple spaces and trim, then split
+  final tokens = processed
+      .split(RegExp(r'\s+'))
+      .where((s) => s.isNotEmpty)
+      .toList();
+
+  // 3. Handle Unary Minus and Binary Minus
+  for (int i = 0; i < tokens.length; i++) {
+    if (tokens[i] == '-') {
+      // Check if the preceding token is an operator, function, or '('.
+      // If it is, this '-' is unary. Otherwise, it's binary.
+      bool isPrecedingTokenOperand = i > 0 && 
+          (double.tryParse(tokens[i - 1]) != null || tokens[i - 1] == 'p' || tokens[i - 1] == '!' || tokens[i-1] == ')');
+
+      if (i == 0 || !isPrecedingTokenOperand) {
+        // Unary minus: merge it with the following token (e.g., -5)
+        if (i + 1 < tokens.length) {
+          tokens[i + 1] = tokens[i] + tokens[i + 1];
+          tokens.removeAt(i);
+          i--; // Adjust index after removal
         }
-      }
-    } else {
-      if (start != -1) {
-        try {
-          var number = expression.getRange(start, end + 1).join("");
-          var value = int.parse(number);
-          expression[start] = value;
-          for (int j = start + 1; j <= end; j++) expression[j] = '';
-        } catch (e) {
-          return null;
-        }
-        start = -1;
-      }
-    }
-  }
-
-  expression.removeWhere((element) => element == '');
-  return expression;
-}
-
-List<dynamic>? construct_decimal_numbers(List<dynamic> expression) {
-  int i = 0;
-  while (i < expression.length) {
-    if (expression[i] == DECIMAL_POINT) {
-      if (i == 0 && (i == expression.length - 1)) return null;
-      try {
-        var number = "${expression[i - 1]}.${expression[i + 1]}";
-        expression[i - 1] = double.parse(number);
-        expression.removeAt(i);
-        expression.removeAt(i);
-      } catch (e) {
-        return null;
-      }
-    } else {
-      i++;
-    }
-  }
-  return expression;
-}
-
-List<dynamic>? convert_negative_numbers(List<dynamic> expression) {
-  for (int i = 0; i < expression.length; i++) {
-    if (expression[i] == OPERATOR_SUBSTRACT) {
-      if (i == (expression.length - 1)) return null;
-
-      if (expression[i + 1] == OPERATOR_SUBSTRACT) {
-        // double negative
-        expression[i] = OPERATOR_ADD;
-        expression[i + 1] = '';
-      } else if (i == 0 && expression[i + 1] is num) {
-        expression[i] = '';
-        expression[i + 1] *= -1;
-      } else if (i > 0 &&
-          (expression[i - 1] is num == false) &&
-          expression[i + 1] is num) {
-        expression[i] = '';
-        expression[i + 1] *= -1;
-      }
-    }
-  }
-  expression.removeWhere((element) => element == '');
-  return expression;
-}
-
-List<dynamic>? calculate_1_value_expression(
-    List<dynamic> expression,
-    String operation_symbol,
-    EnumFunctionValueDirection direction,
-    double? Function(double) calculation_function) {
-  int i = 0;
-  while (i < expression.length) {
-    if (expression[i] == operation_symbol) {
-      if (i == 0 && direction == EnumFunctionValueDirection.LEFT) {
-        return null;
-      }
-      if (i == (expression.length - 1) &&
-          direction == EnumFunctionValueDirection.RIGHT) {
-        return null;
-      }
-      if (expression[i - 1] is num == false &&
-          direction == EnumFunctionValueDirection.LEFT) {
-        return null;
-      }
-      if (expression[i + 1] is num == false &&
-          direction == EnumFunctionValueDirection.RIGHT) {
-        return null;
-      }
-
-      double? result;
-      if (direction == EnumFunctionValueDirection.LEFT) {
-        result = calculation_function(double.parse(expression[i - 1].toString()));
-        if (result == null) return null;
-        // Remove unnecessary elements and update value
-        expression[i - 1] = result;
-        expression.removeAt(i);
-        i = i - 1;
-      } else if (direction == EnumFunctionValueDirection.RIGHT) {
-        result = calculation_function(double.parse(expression[i + 1].toString()));
-        if (result == null) return null;
-        // Remove unnecessary elements and update value
-        expression[i] = result;
-        expression.removeAt(i + 1);
       } else {
-        i++;
-      }
-    } else {
-      i++;
-    }
-  }
-
-  return expression;
-}
-
-List<dynamic>? calculate_2_value_expressions(
-    List<dynamic> expression,
-    String operation_symbol,
-    double? Function(double, double) calculation_function) {
-  int i = 0;
-  while (i < expression.length) {
-    if (expression[i] == operation_symbol) {
-      var prev_num = expression[i - 1];
-      var next_num = expression[i + 1];
-      var result = calculation_function(double.parse(prev_num.toString()),
-            double.parse(next_num.toString()));
-        if (result == null) return null;
-        // Remove unnecessary elements and update value
-        expression[i - 1] = result;
-        expression.removeAt(i);
-        expression.removeAt(i);
-        i = i - 1;
-    } else {
-      i++;
-    }
-  }
-
-  return expression;
-}
-
-double calculate_factorial(double number) {
-  if (number < 0) return 0;
-  if (number == 0) return 1;
-  if (number == 1) return 1;
-  if (number == 2) return 2;
-  int total = 1;
-  for (int n = 1; n <= number; n++) total *= n;
-  return total.toDouble();
-}
-
-double? calculate_permutation(double n, double r) {
-  if (n < r || n < 0 || r < 0) return null;
-  return calculate_factorial(n) / calculate_factorial(n - r);
-}
-
-double? calculate_combinations(double n, double r) {
-  if (n < r || n < 0 || r < 0) return null;
-  return calculate_factorial(n) /
-      (calculate_factorial(r) * calculate_factorial(n - r));
-}
-
-double? calculate_math(List<dynamic> expr) {
-  try {
-    // factorial and nPr and nCr
-    List<dynamic>? expression = calculate_1_value_expression(
-        expr, OPERATOR_FACTORIAL, EnumFunctionValueDirection.LEFT, (number) {
-      var value = calculate_factorial(number);
-      if (value == 0) return null;
-      return value;
-    });
-    if (expression == null) return null;
-
-    expression = calculate_2_value_expressions(
-        expression, PERMUTATIONS, (n, r) => calculate_permutation(n, r));
-    if (expression == null) return null;
-
-    expression = calculate_2_value_expressions(
-        expression, COMBINATIONS, (n, r) => calculate_combinations(n, r));
-    if (expression == null) return null;
-
-    // calculate trigonometry
-
-    expression = calculate_1_value_expression(expression, OPERATOR_SIN,
-        EnumFunctionValueDirection.RIGHT, (number) => sin(number));
-    if (expression == null) return null;
-
-    expression = calculate_1_value_expression(expression, OPERATOR_SINH,
-        EnumFunctionValueDirection.RIGHT, (number) => asin(number));
-    if (expression == null) return null;
-
-    expression = calculate_1_value_expression(expression, OPERATOR_COS,
-        EnumFunctionValueDirection.RIGHT, (number) => cos(number));
-    if (expression == null) return null;
-
-    expression = calculate_1_value_expression(expression, OPERATOR_COSH,
-        EnumFunctionValueDirection.RIGHT, (number) => acos(number));
-    if (expression == null) return null;
-
-    expression = calculate_1_value_expression(expression, OPERATOR_TAN,
-        EnumFunctionValueDirection.RIGHT, (number) => tan(number));
-    if (expression == null) return null;
-
-    expression = calculate_1_value_expression(expression, OPERATOR_TANH,
-        EnumFunctionValueDirection.RIGHT, (number) => atan(number));
-    if (expression == null) return null;
-
-    // calculate logarithms
-    expression = calculate_1_value_expression(expression, OPERATOR_LOG10,
-        EnumFunctionValueDirection.RIGHT, (number) => log(number) / log(10));
-    if (expression == null) return null;
-
-    expression = calculate_1_value_expression(expression, OPERATOR_LN,
-        EnumFunctionValueDirection.RIGHT, (number) => log(number));
-    if (expression == null) return null;
-
-    expression = calculate_2_value_expressions(
-        expression, OPERATOR_LOGx, (a, b) => log(a) / log(b));
-    if (expression == null) return null;
-
-    // calculate exponents and roots
-    expression = calculate_2_value_expressions(
-        expression, OPERATOR_POW, (a, b) => pow(a, b).toDouble());
-    if (expression == null) return null;
-
-    expression = calculate_2_value_expressions(
-        expression, OPERATOR_ROOT, (a, b) => pow(b, 1 / a).toDouble());
-    if (expression == null) return null;
-
-    // calculate basic arithmitic
-    expression = calculate_2_value_expressions(
-        expression, OPERATOR_DIVIDE, (a, b) => a / b);
-    if (expression == null) return null;
-
-    expression = calculate_2_value_expressions(
-        expression, OPERATOR_MULTPILY, (a, b) => a * b);
-    if (expression == null) return null;
-
-    expression = calculate_2_value_expressions(
-        expression, OPERATOR_SUBSTRACT, (a, b) => a - b);
-    if (expression == null) return null;
-
-    expression = calculate_2_value_expressions(
-        expression, OPERATOR_ADD, (a, b) => a + b);
-    if (expression == null) return null;
-
-    if (expression.length != 1) return null;
-    if (expression[0] is num == false) return null;
-
-    double value = double.parse(expression[0].toString());
-    return value;
-  } catch (e) {
-    return null;
-  }
-}
-
-List<dynamic>? calculate_innermost_brackets(
-    List<dynamic> expression, double? Function(List<dynamic>) calculate_math) {
-  int last_open_bracket = -1;
-  int first_close_bracket = -1;
-  int count_open_bracket = 0;
-  int count_close_bracket = 0;
-  for (int i = 0; i < expression.length; i++) {
-    if (expression[i] == '(') {
-      last_open_bracket = i;
-      count_open_bracket += 1;
-    } else if (expression[i] == ')') {
-      count_close_bracket += 1;
-      if (first_close_bracket == -1) {
-        first_close_bracket = i;
+        // Binary minus: replace with placeholder for RPN evaluation
+        tokens[i] = '&'; 
       }
     }
-
-    // Syntax error
-    if (count_close_bracket > count_open_bracket) return null;
-
-    // when the number of open brackets and closing brackets match.
-    // 'last_open_bracket' is the start and 'first_close_bracket' is the end. for the calculation
-    if (count_open_bracket == count_close_bracket &&
-        (first_close_bracket != -1)) {
-      var start = last_open_bracket + 1;
-      var end = first_close_bracket;
-      var bracket_expression = expression.getRange(start, end).toList();
-      var value = calculate_math(bracket_expression);
-      if (value == null) return null;
-      expression[last_open_bracket] = value;
-
-      // remove all elements from last_open_bracket to first_close_bracket
-      for (int j = last_open_bracket + 1; j <= first_close_bracket; j++) {
-        expression.removeAt(last_open_bracket+1);
-      }
-      return expression;
-    }
   }
-
-  return expression;
+  
+  return tokens;
 }
 
-void main(List<String> args) {
-  if (args.length <= 1) return print("PLEASE ADD AN EXPRESSION TO CALCULATE");
-  List<dynamic>? expression = [];
+// --- 4. Shunting-Yard Algorithm (Infix to RPN) ---
 
-  // construct expression for arguments e.g 1+1 +2 /4 *4
-  // whitespaces are automatically handled by joining each argument
-  for (var arg in args) {
-    for (var c in arg.split("")) {
-      if(c != ' '){
-        expression.add(c);
-      }   
+/// Converts a list of infix tokens to a list of RPN tokens.
+List<String> _infixToRpn(List<String> infixTokens) {
+  final outputQueue = <String>[];
+  final operatorStack = <String>[];
+  
+  for (final token in infixTokens) {
+    // 1. If the token is a number or constant 'p', add it to the output queue.
+    if (double.tryParse(token) != null || token == 'p') {
+      outputQueue.add(token);
+    }
+    // 2. If the token is a function or '('
+    else if (definitions.containsKey(token) && definitions[token]!.arity == 1 && token != '!' || token == '(') {
+      operatorStack.add(token);
+    }
+    // 3. If the token is a binary operator ('+' is represented by '&')
+    else if (definitions.containsKey(token) && definitions[token]!.arity == 2) {
+      final OpFuncDef currentDef = definitions[token]!;
+      
+      while (operatorStack.isNotEmpty) {
+        final topToken = operatorStack.last;
+        if (topToken == '(') break;
+
+        final OpFuncDef? topDef = definitions[topToken];
+        if (topDef == null) break; // Should not happen if logic is correct
+        
+        // Check precedence and associativity
+        if ((currentDef.isLeftAssociative && currentDef.precedence <= topDef.precedence) ||
+            (!currentDef.isLeftAssociative && currentDef.precedence < topDef.precedence)) {
+          outputQueue.add(operatorStack.removeLast());
+        } else {
+          break;
+        }
+      }
+      operatorStack.add(token);
+    }
+    // 4. If the token is a postfix operator '!'
+    else if (token == '!') {
+         outputQueue.add(token);
+    }
+    // 5. If the token is ')'
+    else if (token == ')') {
+      while (operatorStack.isNotEmpty && operatorStack.last != '(') {
+        outputQueue.add(operatorStack.removeLast());
+      }
+      if (operatorStack.isEmpty) {
+        throw ArgumentError('Mismatched parentheses in expression.');
+      }
+      operatorStack.removeLast(); // Pop the '('
+      
+      // If there is a function token at the top of the stack, pop it.
+      if (operatorStack.isNotEmpty && definitions.containsKey(operatorStack.last)) {
+        outputQueue.add(operatorStack.removeLast());
+      }
+    }
+    else {
+      throw ArgumentError('Invalid token found: $token');
+    }
+  }
+  
+  // 6. Pop remaining operators from stack to RPN output.
+  while (operatorStack.isNotEmpty) {
+    final token = operatorStack.removeLast();
+    if (token == '(') {
+      throw ArgumentError('Mismatched parentheses in expression.');
+    }
+    outputQueue.add(token);
+  }
+  
+  return outputQueue;
+}
+
+// --- 5. RPN Evaluation ---
+
+/// Evaluates a list of RPN tokens.
+double _evaluateRpn(List<String> rpnTokens) {
+  final valueStack = <double>[];
+
+  for (final token in rpnTokens) {
+    // 1. If the token is a number or 'p', push the value onto the stack.
+    if (double.tryParse(token) != null) {
+      valueStack.add(double.parse(token));
+    } else if (token == 'p') {
+      valueStack.add(pi);
+    }
+    // 2. If the token is a function or operator.
+    else if (definitions.containsKey(token)) {
+      final def = definitions[token]!;
+      
+      if (def.arity == 2) { // Binary
+        if (valueStack.length < 2) throw ArgumentError('Binary operator \'${def.name}\' requires two operands.');
+        double b = valueStack.removeLast();
+        double a = valueStack.removeLast();
+        valueStack.add((def.function as BinaryFunction)(a, b));
+      } else if (def.arity == 1) { // Unary
+        if (valueStack.isEmpty) throw ArgumentError('Unary operator \'${def.name}\' requires one operand.');
+        double a = valueStack.removeLast();
+        valueStack.add((def.function as UnaryFunction)(a));
+      }
+    }
+    else {
+      throw ArgumentError('Unknown token during evaluation: $token');
     }
   }
 
-  // calculate integer numbers
-  expression = construct_numbers_from_string_of_integers(expression);
-  if (expression == null) return print("INVALID NUMBER FORMAT");
-
-  // calculate decimal numbers
-  expression = construct_decimal_numbers(expression);
-  if (expression == null) return print("INVALID DECIMAL NUMBER FORMAT");
-
-  // replace all PI symbols with value
-  for (int i = 0; i < expression.length; i++) {
-    if (['π', 'PI', 'pi', 'p'].contains(expression[i])) expression[i] = pi;
+  if (valueStack.length != 1) {
+    throw ArgumentError('Invalid RPN expression (too many/few operands).');
   }
 
-  // convert negative numbers
-  expression = convert_negative_numbers(expression);
-  if (expression == null) return print("INVALID NEGATIVE NUMBER FORMAT");
+  return valueStack.first;
+}
 
-  // Calculate inner bracket expressions
-  do {
-    expression = calculate_innermost_brackets(expression!, calculate_math);
-    if (expression == null) return print("MATH ERROR");
-  } while (expression.contains("("));
+// --- 6. Main Calculation Flow ---
 
-  var value = calculate_math(expression);
-  if (value == null) return print("MATH ERROR");
+/// Public function to calculate the result of an infix expression.
+double calculate(String expression) {
+  if (expression.trim().isEmpty) return double.nan;
+  
+  _initializeDefinitions(); // Ensure definitions are loaded
 
-  print(value);
+  final tokens = _tokenize(expression);
+  final rpn = _infixToRpn(tokens);
+  return _evaluateRpn(rpn);
+}
+
+// --- 7. Main CLI Loop ---
+
+void main() {
+  _initializeDefinitions(); // Initialize definitions once
+
+  print('--- Dart CLI Calculator (Infix Mode) ---');
+  print('Supported Operations:');
+  print('  Binary: +, -, *, /, ^ (Power), r (Root: a r b = b-th root of a)');
+  print('  Unary (Prefix): S, s, C, c, T, t, l, L (e.g., S30)');
+  print('  Unary (Postfix): ! (Factorial, e.g., 6!)');
+  print('  Constant: p (PI)');
+  print('\nNOTE: Use explicit multiplication (e.g., 2*(3) is correct).');
+  print('Type \'exit\' or \'quit\' to end.\n');
+
+  while (true) {
+    stdout.write('Expression: ');
+    final input = stdin.readLineSync()?.trim();
+
+    if (input == null || input.isEmpty || input.toLowerCase() == 'exit' || input.toLowerCase() == 'quit') {
+      break;
+    }
+
+    try {
+      final result = calculate(input);
+      print('Result: **${result.toStringAsFixed(10)}**\n');
+    } on ArgumentError catch (e) {
+      print('Error: Invalid expression. ${e.message}\n');
+    } catch (e) {
+      print('An unexpected error occurred: $e\n');
+    }
+  }
+
+  print('Exiting calculator. Goodbye!');
 }

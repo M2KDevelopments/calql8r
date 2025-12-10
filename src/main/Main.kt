@@ -1,363 +1,311 @@
-package main
-
 import java.util.*
 import kotlin.math.*
 
-const val DECIMAL_POINT = "."
-const val OPERATOR_ADD = "+"
-const val OPERATOR_SUBSTRACT = "-"
-const val OPERATOR_MULTPILY = "*"
-const val OPERATOR_DIVIDE = "/"
-const val OPERATOR_LOGx = "l"
-const val OPERATOR_POW = "^"
-const val OPERATOR_ROOT = "r"
-const val OPERATOR_SIN = "S"
-const val OPERATOR_SINH = "s"
-const val OPERATOR_COS = "C"
-const val OPERATOR_COSH = "c"
-const val OPERATOR_TAN = "T"
-const val OPERATOR_TANH = "t"
-const val OPERATOR_LOG10 = "L"
-const val OPERATOR_LN = "E"
-const val OPERATOR_FACTORIAL = "!"
-const val PERMUTATIONS = "Y"
-const val COMBINATIONS = "Z"
+// --- 1. Operator and Function Definitions ---
 
-private enum class EnumFunctionValueDirection {
-    LEFT, RIGHT
+// Define custom functional interfaces (type aliases for clarity)
+typealias BinaryFunction = (a: Double, b: Double) -> Double
+typealias UnaryFunction = (a: Double) -> Double
+
+/**
+ * Represents an operator or function with its properties for the Shunting-Yard algorithm.
+ */
+data class OpFuncDef(
+    val name: String,
+    val precedence: Int,
+    val isLeftAssociative: Boolean,
+    val arity: Int, // 1 for unary, 2 for binary
+    val function: Function<*> // Can be BinaryFunction or UnaryFunction
+)
+
+// Global static map for all known operators and functions
+private val DEFINITIONS = mutableMapOf<String, OpFuncDef>()
+
+// --- 2. Function Implementations ---
+
+// Binary Functions
+private val power: BinaryFunction = { a, b -> a.pow(b) }
+
+// Custom Root: a r b means b-th root of a. (Root degree is b)
+private val root: BinaryFunction = { a, b ->
+    if (a < 0 && abs(b % 2.0) < 1e-9) // Check if b is an even integer
+        throw IllegalArgumentException("Cannot take even root of a negative number.")
+    a.pow(1.0 / b)
 }
 
-private fun construct_numbers_from_string_of_integers(expression: ArrayList<Any>?): ArrayList<Any>? {
-    var start = -1
-    var end = 0
-    val numbers = arrayOf("0", "1", "2", "3", "4", "5", "6", "7", "8", "9")
-    for (i in expression!!.indices) {
-        if (Arrays.binarySearch(numbers, expression[i].toString()) >= 0) {
-            if (start == -1) start = i
-            end = i
-            if (end == expression.size - 1 && start != -1) {
-                try {
-                    val number = expression.subList(start, end + 1).joinToString("")
-                    val value = number.toInt()
-                    expression[start] = value
-                    for (j in start + 1..end) expression[j] = ""
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    return null
+// Unary Post-fix Factorial
+private val factorial: UnaryFunction = { a ->
+    if (a < 0 || abs(a % 1.0) > 1e-9)
+        throw IllegalArgumentException("Factorial only defined for non-negative integers.")
+    if (a == 0.0) 1.0 else (1..a.toInt()).fold(1.0) { acc, i -> acc * i }
+}
+
+// --- 3. Static Initialization Block ---
+
+private fun initializeDefinitions() {
+    if (DEFINITIONS.isNotEmpty()) return
+
+    // Precedence: Higher number binds tighter
+
+    // Postfix Unary (Highest Precedence)
+    DEFINITIONS["!"] = OpFuncDef("!", 6, true, 1, factorial)
+
+    // Prefix Unary Functions (Right Associative precedence 5)
+    DEFINITIONS["S"] = OpFuncDef("S", 5, false, 1, ::sin)
+    DEFINITIONS["s"] = OpFuncDef("s", 5, false, 1, ::sinh)
+    DEFINITIONS["C"] = OpFuncDef("C", 5, false, 1, ::cos)
+    DEFINITIONS["c"] = OpFuncDef("c", 5, false, 1, ::cosh)
+    DEFINITIONS["T"] = OpFuncDef("T", 5, false, 1, ::tan)
+    DEFINITIONS["t"] = OpFuncDef("t", 5, false, 1, ::tanh)
+    DEFINITIONS["l"] = OpFuncDef("l", 5, false, 1, ::ln)    // Ln (Natural Log)
+    DEFINITIONS["L"] = OpFuncDef("L", 5, false, 1, ::log10) // Log10
+
+    // Binary Operators
+    DEFINITIONS["^"] = OpFuncDef("^", 4, false, 2, power)  // Right Associative
+    DEFINITIONS["r"] = OpFuncDef("r", 4, true, 2, root)    // Left Associative
+
+    DEFINITIONS["*"] = OpFuncDef("*", 3, true, 2) { a, b -> a * b }
+    DEFINITIONS["/"] = OpFuncDef("/", 3, true, 2) { a, b -> a / b }
+
+    DEFINITIONS["+"] = OpFuncDef("+", 2, true, 2) { a, b -> a + b }
+    // Internal token '_' for binary subtraction, distinguishing it from unary minus.
+    DEFINITIONS["_"] = OpFuncDef("-", 2, true, 2) { a, b -> a - b }
+}
+
+// --- 4. Lexer/Tokenizer ---
+
+/**
+ * Converts the raw input string into a list of tokens, handling unary minus.
+ */
+private fun tokenize(expression: String): List<String> {
+    // Ensure definitions are initialized
+    initializeDefinitions()
+    
+    // 1. Preprocess: Insert spaces around tokens for easier splitting
+    var processed = expression.replace("\\s+".toRegex(), "") // Remove existing spaces
+
+    val separators = listOf("(", ")", "+", "*", "/", "^", "!", "r", "S", "s", "C", "c", "T", "t", "l", "L", "p")
+    for (sep in separators) {
+        processed = processed.replace(sep, " $sep ")
+    }
+
+    // Separate minus sign, which is handled specially
+    processed = processed.replace("-", " - ")
+
+    // Clean up multiple spaces and split
+    val tokens = processed.split("\\s+".toRegex()).filter { it.isNotEmpty() }.toMutableList()
+
+    // 2. Handle Unary Minus vs. Binary Minus
+    val resultTokens = mutableListOf<String>()
+
+    for (i in tokens.indices) {
+        val token = tokens[i]
+        
+        if (token == "-") {
+            // Check if the preceding token is an operand (number, constant, '!', or ')')
+            val isPrecedingTokenOperand = resultTokens.isNotEmpty() &&
+                (isNumberOrConstant(resultTokens.last()) || resultTokens.last() == "!" || resultTokens.last() == ")")
+            
+            if (i == 0 || !isPrecedingTokenOperand) {
+                // Unary Minus: Merge it with the next token (e.g., "-5")
+                if (i + 1 < tokens.size) {
+                    tokens[i + 1] = token + tokens[i + 1]
                 }
-            }
-        } else {
-            if (start != -1) {
-                try {
-                    val number = expression.subList(start, end + 1).joinToString("")
-                    val value = number.toInt()
-                    expression[start] = value
-                    for (j in start + 1..end) expression[j] = ""
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    return null
-                }
-                start = -1
-            }
-        }
-    }
-    expression.removeIf { n: Any -> n === "" }
-    return expression
-}
-
-private fun construct_decimal_numbers(expression: ArrayList<Any>?): ArrayList<Any>? {
-    var i = 0
-    while (i < expression!!.size) {
-        if (expression[i].toString() == DECIMAL_POINT) {
-            if (i == 0 && i == expression.size - 1) return null
-            try {
-                val number = expression[i - 1].toString() + "." + expression[i + 1]
-                expression[i - 1] = number.toDouble()
-                expression.removeAt(i)
-                expression.removeAt(i)
-            } catch (e: Exception) {
-                return null
-            }
-        } else {
-            i++
-        }
-    }
-    return expression
-}
-
-private fun convert_negative_numbers(expression: ArrayList<Any>?): ArrayList<Any>? {
-    for (i in expression!!.indices) {
-        if (expression[i].toString() == OPERATOR_SUBSTRACT) {
-            if (i == expression.size - 1) return null
-            if (expression[i + 1].toString() == OPERATOR_SUBSTRACT) {
-                // double negative
-                expression[i] = OPERATOR_ADD
-                expression[i + 1] = ""
-            } else if (i == 0 && expression[i + 1] is Double) {
-                expression[i] = ""
-                expression[i + 1] = expression[i + 1] as Double * -1
-            } else if (i > 0 && expression[i - 1] is Double && expression[i + 1] is Double) {
-                expression[i] = ""
-                expression[i + 1] = expression[i + 1] as Double * -1
-            }
-        }
-    }
-    expression.removeIf { n: Any -> n === "" }
-    return expression
-}
-
-private fun calculate_1_value_expression(
-    expression: ArrayList<Any>?,
-    operation_symbol: String,
-    direction: EnumFunctionValueDirection,
-    calculation_function: (Double) -> Double?
-): ArrayList<Any>? {
-    var i = 0
-    while (i < expression!!.size) {
-        if (expression[i].toString() == operation_symbol) {
-            if (i == 0 && direction == EnumFunctionValueDirection.LEFT) {
-                return null
-            }
-            if (i == expression.size - 1 && direction == EnumFunctionValueDirection.RIGHT) {
-                return null
-            }
-            if (expression[i - 1] !is Double && direction == EnumFunctionValueDirection.LEFT) {
-                return null
-            }
-            if (expression[i + 1] !is Double && direction == EnumFunctionValueDirection.RIGHT) {
-                return null
-            }
-            var result: Double
-            if (direction == EnumFunctionValueDirection.LEFT) {
-                result = calculation_function(expression[i - 1].toString().toDouble()) ?: return null
-                // Remove unnecessary elements and update value
-                expression[i - 1] = result
-                expression.removeAt(i)
-                i -= 1
-            } else if (direction == EnumFunctionValueDirection.RIGHT) {
-                result = calculation_function(expression[i + 1].toString().toDouble()) ?: return null
-                // Remove unnecessary elements and update value
-                expression[i] = result
-                expression.removeAt(i + 1)
+                // Skip the current token as it's merged into the next
             } else {
-                i++
+                // Binary Minus: Use the internal token '_'
+                resultTokens.add("_")
             }
         } else {
-            i++
+            resultTokens.add(token)
         }
     }
-    return expression
+    return resultTokens
 }
 
-private fun calculate_2_value_expressions(
-    expression: ArrayList<Any>?,
-    operation_symbol: String,
-    calculation_function: (Double, Double) -> Double?
-): ArrayList<Any>? {
-    var i = 0
-    while (i < expression!!.size) {
-        val c = expression[i].toString()
-        if (c == operation_symbol) {
-            val prevNum = expression[i - 1].toString().toDouble()
-            val nextNum = expression[i + 1].toString().toDouble()
-            val result = calculation_function(prevNum, nextNum) ?: return null
-            // Remove unnecessary elements and update value
-            expression[i - 1] = result
-            expression.removeAt(i)
-            expression.removeAt(i)
-            i -= 1
-        } else {
-            i++
+private fun isNumberOrConstant(s: String): Boolean {
+    if (s == "p") return true
+    return s.toDoubleOrNull() != null
+}
+
+// --- 5. Shunting-Yard Algorithm (Infix to RPN) ---
+
+/**
+ * Converts a list of infix tokens to a list of RPN tokens using Shunting-Yard.
+ */
+private fun infixToRpn(infixTokens: List<String>): List<String> {
+    val outputQueue = mutableListOf<String>()
+    val operatorStack = Stack<String>()
+
+    for (token in infixTokens) {
+        // 1. Number or constant 'p'
+        if (isNumberOrConstant(token)) {
+            outputQueue.add(token)
         }
-    }
-    return expression
-}
+        // 2. Function or prefix unary operator (not '!')
+        else if (DEFINITIONS.containsKey(token) && DEFINITIONS[token]!!.arity == 1 && token != "!" || token == "(") {
+            operatorStack.push(token)
+        }
+        // 3. Binary operator ('_' is binary subtraction)
+        else if (DEFINITIONS.containsKey(token) && DEFINITIONS[token]!!.arity == 2) {
+            val currentDef = DEFINITIONS[token]!!
+            
+            while (operatorStack.isNotEmpty()) {
+                val topToken = operatorStack.peek()
+                if (topToken == "(") break
 
-private fun calculate_factorial(number: Double): Double {
-    if (number < 0) return 0.0
-    if (number == 0.0) return 1.0
-    if (number == 1.0) return 1.0
-    if (number == 2.0) return 2.0
-    var total = 1
-    var n = 1
-    while (n <= number) {
-        total *= n
-        n++
-    }
-    return total.toDouble()
-}
+                val topDef = DEFINITIONS[topToken] ?: break
+                
+                // Check precedence and associativity
+                val isHigherPrecedence = currentDef.precedence < topDef.precedence
+                val isSamePrecedenceLeftAssoc = currentDef.precedence == topDef.precedence && currentDef.isLeftAssociative
 
-private fun calculate_permutation(n: Double, r: Double): Double? {
-    return if (n < r || n < 0 || r < 0) null else calculate_factorial(n) / calculate_factorial(n - r)
-}
-
-private fun calculate_combinations(n: Double, r: Double): Double? {
-    return if (n < r || n < 0 || r < 0) null else calculate_factorial(n) / (calculate_factorial(
-        r
-    ) * calculate_factorial(n - r))
-}
-
-private fun calculate_math(expr: ArrayList<Any>?): Double? {
-    return try {
-        // factorial and nPr and nCr
-        var expression = calculate_1_value_expression(expr, OPERATOR_FACTORIAL, EnumFunctionValueDirection.LEFT) { num: Double ->calculate_factorial(num) }
-        if (expression === null) return null
-
-        expression = calculate_2_value_expressions(expression, PERMUTATIONS) { n: Double, r: Double -> calculate_permutation(n, r)}
-        if (expression === null) return null
-
-        expression = calculate_2_value_expressions(expression, COMBINATIONS) { n: Double, r: Double -> calculate_combinations(n, r)}
-        if (expression === null) return null
-
-        // calculate trigonometry
-        expression = calculate_1_value_expression(expression, OPERATOR_SIN, EnumFunctionValueDirection.RIGHT) { a -> sin(a) }
-        if (expression === null) return null
-        expression = calculate_1_value_expression(expression, OPERATOR_SINH, EnumFunctionValueDirection.RIGHT) { x -> sinh(x) }
-        if (expression === null) return null
-        expression = calculate_1_value_expression(expression, OPERATOR_COS, EnumFunctionValueDirection.RIGHT) { a -> cos(a) }
-        if (expression === null) return null
-        expression = calculate_1_value_expression(expression, OPERATOR_COSH, EnumFunctionValueDirection.RIGHT) { x -> cosh(x) }
-        if (expression === null) return null
-        expression = calculate_1_value_expression(expression, OPERATOR_TAN, EnumFunctionValueDirection.RIGHT){ x -> tan(x) }
-        if (expression === null) return null
-
-        expression = calculate_1_value_expression(expression, OPERATOR_TANH, EnumFunctionValueDirection.RIGHT) { x -> tanh(x) }
-        if (expression === null) return null
-
-        // calculate logarithms
-        expression = calculate_1_value_expression(expression, OPERATOR_LOG10, EnumFunctionValueDirection.RIGHT) { num -> log10(num) }
-        if (expression === null) return null
-
-        expression = calculate_1_value_expression(expression, OPERATOR_LN, EnumFunctionValueDirection.RIGHT) { a -> Math.log(a) }
-        if (expression === null) return null
-
-        expression = calculate_2_value_expressions(expression, OPERATOR_LOGx) { a, b -> ln(a) / ln(b) }
-        if (expression === null) return null
-
-        // calculate exponents and roots
-        expression = calculate_2_value_expressions(expression, OPERATOR_POW) { a, b -> a.pow(b) }
-        if (expression === null) return null
-        expression = calculate_2_value_expressions(expression, OPERATOR_ROOT) { a, b -> b.pow(1.0 / a) }
-        if (expression === null) return null
-
-        // calculate basic arithmetic
-        expression = calculate_2_value_expressions(expression, OPERATOR_DIVIDE) { a: Double, b: Double -> a / b }
-        if (expression === null) return null
-        expression = calculate_2_value_expressions(expression, OPERATOR_MULTPILY) { a: Double, b: Double -> a * b }
-        if (expression === null) return null
-        expression = calculate_2_value_expressions(expression, OPERATOR_SUBSTRACT) { a: Double, b: Double -> a - b }
-        if (expression === null) return null
-        expression = calculate_2_value_expressions(expression, OPERATOR_ADD) { a: Double, b: Double -> a + b }
-
-        if (expression === null) return null
-
-        if (expression.size != 1) return null
-
-        if (expression[0] !is Double) null else expression[0].toString().toDouble()
-
-    } catch (e: Exception) {
-        null
-    }
-}
-
-private fun calculate_innermost_brackets(expression: ArrayList<Any>?, calculate_fn:(expr:ArrayList<Any>?)->Double?): ArrayList<Any>? {
-    var last_open_bracket = -1
-    var first_close_bracket = -1
-    var count_open_bracket = 0
-    var count_close_bracket = 0
-    for (i in expression!!.indices) {
-        if (expression[i].toString() == "(") {
-            last_open_bracket = i
-            count_open_bracket += 1
-        } else if (expression[i].toString() == ")") {
-            count_close_bracket += 1
-            if (first_close_bracket == -1) {
-                first_close_bracket = i
+                if (isHigherPrecedence || isSamePrecedenceLeftAssoc) {
+                    outputQueue.add(operatorStack.pop())
+                } else {
+                    break
+                }
+            }
+            operatorStack.push(token)
+        }
+        // 4. Postfix operator '!'
+        else if (token == "!") {
+             outputQueue.add(token)
+        }
+        // 5. If the token is ')'
+        else if (token == ")") {
+            while (operatorStack.isNotEmpty() && operatorStack.peek() != "(") {
+                outputQueue.add(operatorStack.pop())
+            }
+            if (operatorStack.isEmpty())
+                throw IllegalArgumentException("Mismatched parentheses in expression: missing '('")
+            
+            operatorStack.pop() // Pop the '('
+            
+            // Pop function if one is above '('
+            if (operatorStack.isNotEmpty() && DEFINITIONS.containsKey(operatorStack.peek())) {
+                outputQueue.add(operatorStack.pop())
             }
         }
-
-        // Syntax error
-        if (count_close_bracket > count_open_bracket) return null
-
-        // when the number of open brackets and closing brackets match.
-        // 'last_open_bracket' is the start and 'first_close_bracket' is the end. for the calculation
-        if (count_open_bracket == count_close_bracket &&
-            first_close_bracket != -1
-        ) {
-            val start = last_open_bracket + 1
-            val end = first_close_bracket
-            val bracket_expression = expression.subList(start, end) as ArrayList<Any>
-            val value = calculate_fn(bracket_expression) ?: return null
-            expression[last_open_bracket] = value
-
-            // remove all elements from last_open_bracket to first_close_bracket
-            for (j in last_open_bracket + 1..first_close_bracket) {
-                expression.removeAt(last_open_bracket + 1)
-            }
-            return expression
+        else {
+            throw IllegalArgumentException("Invalid token found during parsing: $token")
         }
     }
-    return expression
+
+    // 6. Pop remaining operators
+    while (operatorStack.isNotEmpty()) {
+        val token = operatorStack.pop()
+        if (token == "(")
+            throw IllegalArgumentException("Mismatched parentheses in expression: missing ')'")
+        
+        outputQueue.add(token)
+    }
+    
+    return outputQueue
 }
 
-fun main(args: Array<String>) {
+// --- 6. RPN Evaluation ---
 
-    if (args.size <= 1) {
-        println("PLEASE ADD AN EXPRESSION TO CALCULATE")
-        return
-    }
-    var expression:ArrayList<Any>? = ArrayList<Any>()
+/**
+ * Evaluates a list of RPN tokens.
+ */
+private fun evaluateRpn(rpnTokens: List<String>): Double {
+    val valueStack = Stack<Double>()
 
-    // construct expression for arguments e.g 1+1 +2 /4 *4
-    // white spaces are automatically handled by joining each argument
-    for (i in 1 until args.size) {
-        for (j in 0 until args[i].length) {
-            if(args[i][j].toString() != " "){
-                expression?.add(args[i][j].toString())
+    for (token in rpnTokens) {
+        // 1. Number or 'p'
+        if (isNumberOrConstant(token)) {
+            if (token == "p") {
+                valueStack.push(PI)
+            } else {
+                valueStack.push(token.toDouble())
             }
         }
-    }
-
-    // create the number from string
-    expression = construct_numbers_from_string_of_integers(expression)
-    if (expression === null) {
-        println("INVALID NUMBER FORMAT")
-        return
-    }
-
-    // calculate decimal numbers
-    expression = construct_decimal_numbers(expression)
-    if (expression === null) {
-        println("INVALID DECIMAL NUMBER FORMAT")
-        return
-    }
-
-    // replace all PI symbols with value
-    for (i in expression.indices) {
-        val piExists = Arrays.binarySearch(arrayOf("π", "PI", "pi", "p"), expression[i].toString()) >= 0
-        if (piExists) expression[i] = PI
-    }
-
-    // convert negative numbers
-    expression = convert_negative_numbers(expression)
-    if (expression === null) {
-        println("INVALID NEGATIVE NUMBER FORMAT")
-        return
-    }
-
-    // Calculate inner bracket expressions
-    do {
-        expression = calculate_innermost_brackets(expression) {expr -> calculate_math(expr) }
-        if (expression === null) {
-            println("MATH ERROR")
-            return
+        // 2. Function or operator
+        else if (DEFINITIONS.containsKey(token)) {
+            val def = DEFINITIONS[token]!!
+            
+            if (def.arity == 2) { // Binary
+                if (valueStack.size < 2) throw IllegalArgumentException("Binary operator '${def.name}' requires two operands.")
+                val b = valueStack.pop()
+                val a = valueStack.pop()
+                valueStack.push((def.function as BinaryFunction)(a, b))
+            }
+            else if (def.arity == 1) { // Unary
+                if (valueStack.isEmpty()) throw IllegalArgumentException("Unary operator '${def.name}' requires one operand.")
+                val a = valueStack.pop()
+                valueStack.push((def.function as UnaryFunction)(a))
+            }
         }
-    } while (expression!!.contains("("))
-    val value = calculate_math(expression)
-    if (value == null) {
-        println("MATH ERROR")
-        return
+        else {
+            throw IllegalArgumentException("Unknown token during evaluation: $token")
+        }
+
+        // Check for math domain errors (NaN, Infinity)
+        if (!valueStack.isEmpty() && (valueStack.peek().isNaN() || valueStack.peek().isInfinite())) {
+            throw ArithmeticException("Math domain error (e.g., log(-1)) or division by zero.")
+        }
     }
-    println(value)
+
+    if (valueStack.size != 1)
+        throw IllegalArgumentException("Invalid RPN expression (too many/few operands).")
+
+    return valueStack.pop()
 }
 
+// --- 7. Main Execution Flow ---
+
+/**
+ * Public method to calculate the result of an infix expression string.
+ */
+fun calculate(expression: String): Double {
+    initializeDefinitions()
+    if (expression.trim().isEmpty()) {
+        throw IllegalArgumentException("Expression cannot be empty.")
+    }
+    
+    val tokens = tokenize(expression)
+    val rpn = infixToRpn(tokens)
+    
+    // RPN DEBUG: println("RPN: $rpn") 
+    
+    return evaluateRpn(rpn)
+}
+
+// --- 8. Main CLI Loop ---
+
+fun main() {
+    val scanner = Scanner(System.`in`)
+
+    println("--- Kotlin CLI Calculator (Infix Mode) ---")
+    println("Supported Operations:")
+    println("  Binary: +, -, *, /, ^ (Power), r (Root: a r b = b-th root of a)")
+    println("  Unary (Prefix): S, s, C, c, T, t, l, L (e.g., S30)")
+    println("  Unary (Postfix): ! (Factorial, e.g., 6!)")
+    println("  Constant: p (PI)")
+    println("\nNOTE: Use explicit multiplication (e.g., 2*(3) is correct).")
+    println("Type 'exit' or 'quit' to end.\n")
+
+    while (true) {
+        print("Expression: ")
+        val input = scanner.nextLine().trim()
+
+        if (input.isEmpty() || input.equals("exit", ignoreCase = true) || input.equals("quit", ignoreCase = true)) {
+            break
+        }
+
+        try {
+            val result = calculate(input)
+            println("Result: **${"%.10f".format(result)}**\n")
+        } catch (ex: IllegalArgumentException) {
+            println("Error: Invalid expression. ${ex.message}\n")
+        } catch (ex: ArithmeticException) {
+            println("Error: Math exception. ${ex.message}\n")
+        } catch (ex: Exception) {
+            println("An unexpected error occurred: ${ex.message}\n")
+        }
+    }
+
+    println("Exiting calculator. Goodbye!")
+    scanner.close()
+}

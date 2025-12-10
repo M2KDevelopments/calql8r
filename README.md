@@ -19,6 +19,51 @@ My Calculate library implementation in multiple languages
     <li>Tanh = t</li>
 </ul>
 
+
+### Prompt
+```
+I need you write a CLI calculator program in [LANGUAGE] so that I can put a any string expression like 1+2 2+5^4 +2*(2+25) 6! + 2r4 + L2 
+
+
+
+# What the letters mean
+
+// Sin - S 
+
+// SinH - s 
+
+// Cos - C 
+
+// CosH - c
+
+ // Tan - T 
+
+// Tanh - t 
+
+// Pow - ^ 
+
+// RT - r 
+
+// Ln - l 
+
+// Log - L
+
+ // p= 3.142...
+
+
+
+# Functions that need 2 values are write has aFb, where a is first number and b is the second number. and F is the letter for the function
+
+
+
+# Function that need 1 value are writen as Fn where n is number. and F is the letter for the function. Except for factorials which are n! 
+
+
+
+Put all the code in one file.
+```
+
+
 ### Logarithmns and Exponentials
 <ul>
     <li>e = e</li>
