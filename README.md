@@ -7,6 +7,51 @@ My Calculate library implementation in multiple languages
 ![Static Badge](https://img.shields.io/badge/buy_me_a_coffee-yellow?style=plastic&logo=buymeacoffee&logoColor=yellow&label=support&link=https%3A%2F%2Fwww.buymeacoffee.com%2Fm2kdevelopments)
 ![Static Badge](https://img.shields.io/badge/paypal-blue?style=plastic&logo=paypal&logoColor=blue&label=support&link=https%3A%2F%2Fpaypal.me%2Fm2kdevelopment)
 
+## AI Prompt
+```
+I need you write a CLI calculator program in [LANGUAGE] so that I can put a any string expression like 1+2 
+2+5^4 +2*(2+25) 
+6! + 2r4 + L2 
+
+
+
+# What the letters mean
+
+// Sin - S 
+
+// SinH - s 
+
+// Cos - C 
+
+// CosH - c
+
+ // Tan - T 
+
+// Tanh - t 
+
+// Pow - ^ 
+
+// RT - r 
+
+// Ln - l 
+
+// Log - L
+
+ // p= 3.142...
+
+
+
+# Functions that need 2 values are write has aFb, where a is first number and b is the second number. and F is the letter for the function
+
+
+
+# Function that need 1 value are written as Fn where n is number. and F is the letter for the function. Except for factorials which are n! 
+
+
+
+Put all the code in one file.
+```
+
 
 ## Using Single Letter Values to Represent Functions
 ### Trigonometry
