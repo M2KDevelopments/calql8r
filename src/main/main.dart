@@ -315,7 +315,7 @@ List<dynamic>? calculate_innermost_brackets(
     }
 
     // Syntax error
-    if (count_close_bracket > count_close_bracket) return null;
+    if (count_close_bracket > count_open_bracket) return null;
 
     // when the number of open brackets and closing brackets match.
     // 'last_open_bracket' is the start and 'first_close_bracket' is the end. for the calculation

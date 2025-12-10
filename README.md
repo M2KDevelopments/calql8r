@@ -46,6 +46,7 @@ My Calculate library implementation in multiple languages
 
 ## Run it with Node JS
 ```bash
+# https://nodejs.org/en/download
 node src/main/main.js "1+1"
 ```
 
@@ -85,11 +86,14 @@ dart compile exe src/main/main.dart -o src/main/calql8r
 ## Run it with C#
 ```bash
 # dotnet version 10 or above
+# https://dotnet.microsoft.com/en-us/download/dotnet/10.0
 dotnet run src/main/Main.cs 1+1
 ```
 
 ## Run it with Python
 ```bash
+# Python v3 and above
+# https://www.python.org/downloads/
 python src/main/main.py 1 + 1
 ```
 

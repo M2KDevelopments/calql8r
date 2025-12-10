@@ -284,7 +284,7 @@ def calculate_innermost_brackets(expression:list, calculate_math: Callable[[list
             if (first_close_bracket == -1):
                 first_close_bracket = i
 
-        if (count_close_bracket > count_close_bracket):
+        if (count_close_bracket > count_open_bracket):
             return None
 
         # when the number of open brackets and closing brackets match.

@@ -710,7 +710,7 @@ struct Expression calculate_innermost_brackets(struct Expression expression){
         }
 
         // if there are more close brackets than open ones mid-count error
-        if (count_close_bracket > count_close_bracket) {
+        if (count_close_bracket > count_open_bracket) {
             expr.error = CAL_ERROR_SYNTAX;
             return expr;
         }

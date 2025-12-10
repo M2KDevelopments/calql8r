@@ -480,7 +480,7 @@ function calculate_innermost_brackets(list, callback_calculation) {
         }
 
         // if there are more close brackets than open ones mid-count error
-        if (count_close_bracket > count_close_bracket) throw Error('Math Syntax Error: Brackets')
+        if (count_close_bracket > count_open_bracket) throw Error('Math Syntax Error: Brackets')
 
 
         // if the count of the opening and closing brackets match

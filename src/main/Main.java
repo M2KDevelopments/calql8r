@@ -197,12 +197,12 @@ public class Main {
     }
 
     private static double calculate_permutation(double n, double r) {
-        if (n < r || n < 0 || r < 0) return Integer.MIN_VALUE;
+        if (n < r || n < 0 || r < 0) return Double.MIN_VALUE;
         return calculate_factorial(n) / calculate_factorial(n - r);
     }
 
     private static double calculate_combinations(double n, double r) {
-        if (n < r || n < 0 || r < 0) return Integer.MIN_VALUE;
+        if (n < r || n < 0 || r < 0) return Double.MIN_VALUE;
         return calculate_factorial(n) / (calculate_factorial(r) * calculate_factorial(n - r));
     }
 
@@ -299,7 +299,7 @@ public class Main {
             }
 
             // Syntax error
-            if (count_close_bracket > count_close_bracket) return null;
+            if (count_close_bracket > count_open_bracket) return null;
 
             // when the number of open brackets and closing brackets match.
             // 'last_open_bracket' is the start and 'first_close_bracket' is the end. for the calculation
@@ -343,7 +343,7 @@ public class Main {
 
         // create the number from string
         expression = construct_numbers_from_string_of_integers(expression);
-
+        
         // calculate decimal numbers
         expression = construct_decimal_numbers(expression);
         if (expression == ERROR) {
