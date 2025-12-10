@@ -517,7 +517,9 @@ function calculate(expression) {
 
     // replace constants
     for (const i in list) {
-        if (list[i] == 'p') list[i] = Math.PI;
+        if (list[i] == 'p') {
+            list[i] = Math.PI;
+        }
     }
 
     // recursive calcalutions until answer is found.
