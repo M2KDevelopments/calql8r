@@ -3,6 +3,9 @@
 *.class
 *.exe
 *.jar
+*.txt
+*.csv
+*.MF
 output/
 bin/
 dist/

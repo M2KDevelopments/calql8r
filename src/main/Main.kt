@@ -302,7 +302,7 @@ private fun calculate_innermost_brackets(expression: ArrayList<Any>?, calculate_
 
 fun main(args: Array<String>) {
 
-    if (args.size <= 1) {
+    if (args.size < 1) {
         println("PLEASE ADD AN EXPRESSION TO CALCULATE")
         return
     }

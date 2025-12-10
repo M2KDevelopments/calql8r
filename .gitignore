@@ -5,11 +5,14 @@
 *.jar
 *.txt
 *.csv
+*.MF
 output/
 bin/
 dist/
 build/
 calql8r
 out/
+META-INF/
+
 # Libraries
 node_modules/

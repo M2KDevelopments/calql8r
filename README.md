@@ -59,22 +59,29 @@ go run src/main/main.go "1.1+1.1"
 
 ## Run it with Java 
 ```bash
-javac src/main/Main.java 
-java src/main/Main "1+1"
+echo Main-Class: src.main.Main> src/main/MANIFEST.MF
+javac src/main/Main.java
+jar cvfm src/main/Main.jar src/main/MANIFEST.MF src/main/*.class
+java -jar src/main/Main.jar 1+1
 ```
 
 ## Run it with Kotlin
 ```bash
+# https://www.jetbrains.com/idea/download/
+# Environmental Variable - [IntelliJ Folder]/plugins/Kotlin/kotlinc/bin
 kotlinc -version
-kotlinc src/main/main.kt
-kotlin src/main/MainKt "1+1"
+kotlinc src/main/Main.kt -include-runtime -d src/main/CalQl8r.jar
+java -jar src/main/CalQl8r.jar 1 + 1
 ```
+
 
 ## Run it with C (gcc)
 ```bash
 # Compile and run
-gcc src/main/main.c -lm -o src/main/calql8r
-./src/main/calql8r "1465+225+55.7 36 63-9+8* 9 /8 + 2^2 + 2r4 + p + (1+1 + (2r4) + 3) + 6!+789"
+gcc src/main/main.c -lm -o src/main/main
+
+# Run on windows
+CMD /C "cd src/main/ && main.exe 1465+225+55.7 36 63-9+8* 9 /8 + 2^2 + 2r4 + p + (1+1 +(2r4) + 3) + 6!+789"
 ```
 
 ## Run it with Dart

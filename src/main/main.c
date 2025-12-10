@@ -900,10 +900,10 @@ int main(int argc, char *argv[]){
     }
 
     //show answer
-    printf("\n\n");
     for(int i =0; i < expr.array_length; i++) {
         if(expr.elements[i].type == NUMBER) printf("%lf", expr.elements[i].value);
         else printf("%c", expr.elements[i].type);
     }
+    printf("\n");
     return 0;
 }
