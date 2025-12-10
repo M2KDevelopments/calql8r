@@ -1,451 +1,192 @@
 using System;
-using System.Collections;
-using System.Linq; // Required for the Contains method
 
-class CalQl8r
+class Calculator
 {
-    static String DECIMAL_POINT = ".";
-    static String OPERATOR_ADD = "+";
-    static String OPERATOR_SUBSTRACT = "-";
-    static String OPERATOR_MULTPILY = "*";
-    static String OPERATOR_DIVIDE = "/";
-    static String OPERATOR_LOGx = "l";
-    static String OPERATOR_POW = "^";
-    static String OPERATOR_ROOT = "r";
-    static String OPERATOR_SIN = "S";
-    static String OPERATOR_SINH = "s";
-    static String OPERATOR_COS = "C";
-    static String OPERATOR_COSH = "c";
-    static String OPERATOR_TAN = "T";
-    static String OPERATOR_TANH = "t";
-    static String OPERATOR_LOG10 = "L";
-    static String OPERATOR_LN = "E";
-    static String OPERATOR_FACTORIAL = "!";
-
-    static String PERMUTATIONS = "Y";
-    static String COMBINATIONS = "Z";
-
-    private enum EnumFunctionValueDirection { LEFT, RIGHT }
-
-
-    private static ArrayList? ConstructNumbersFromStringOfIntegers(ArrayList expression)
+    static void Main()
     {
-        int start = -1;
-        int end = 0;
-        String[] numbers = { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9" };
-        for (int i = 0; i < expression!.Count; i++)
+        Console.WriteLine("CLI Scientific Calculator (type 'exit' to quit)");
+
+        while (true)
         {
-            if (numbers.Contains(expression[i]!.ToString()))
+            Console.Write("> ");
+            string input = Console.ReadLine();
+
+            if (input.Trim().ToLower() == "exit")
+                break;
+
+            try
             {
-                if (start == -1) start = i;
-                end = i;
-                if ((end == expression!.Count - 1) && start != -1)
-                {
-                    try
-                    {
-                        var number = "";
-                        for(int j = start; j <= end; j++) {
-                            number += expression[j]!.ToString();
-                        }
-                        var value = int.Parse(number);
-                        expression[start] = value;
-                        for (int j = start + 1; j <= end; j++) {
-                            expression[j] = "";
-                        }
-                    }
-                    catch (Exception)
-                    {
-                        return null;
-                    }
-                }
+                var parser = new ExpressionParser(input);
+                double result = parser.ParseExpression();
+                Console.WriteLine("= " + result);
             }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error: " + ex.Message);
+            }
+        }
+    }
+}
+
+public class ExpressionParser
+{
+    private string text;
+    private int pos;
+
+    public ExpressionParser(string input)
+    {
+        text = input.Replace(" ", "");
+        pos = 0;
+    }
+
+    private char Peek() => pos < text.Length ? text[pos] : '\0';
+    private char Next() => pos < text.Length ? text[pos++] : '\0';
+    private bool Eat(char c)
+    {
+        if (Peek() == c) { pos++; return true; }
+        return false;
+    }
+
+    // MAIN: expression → term ((+|-) term)*
+    public double ParseExpression()
+    {
+        double value = ParseTerm();
+
+        while (true)
+        {
+            if (Eat('+'))
+                value += ParseTerm();
+            else if (Eat('-'))
+                value -= ParseTerm();
             else
-            {
-                if (start != -1)
-                {
-                    try
-                    {
-                        var number = "";
-                        for(int j = start; j <= end; j++) number += expression[j]!.ToString();
-                        var value = int.Parse(number);
-                        expression[start] = value;
-                        for (int j = start + 1; j <= end; j++) expression[j] = "";
-                    }
-                    catch (Exception)
-                    {
-                        return null;
-                    }
-                    start = -1;
-                }
-            }
+                return value;
         }
-
-        while (expression!.Contains(""))
-        {
-            expression.Remove("");
-        }
-        return expression;
     }
 
-    private static ArrayList? ConstructDecimalNumbers(ArrayList expression)
+    // term → factor ((*|/) factor)*
+    private double ParseTerm()
     {
-        int i = 0;
-        while (i < expression!.Count)
+        double value = ParseFactor();
+
+        while (true)
         {
-            if ((expression[i]!.ToString() == DECIMAL_POINT))
-            {
-                if (i == 0 && (i == expression!.Count - 1)) return null;
-                try
-                {
-                    var number = expression[i - 1] + "." + expression[i + 1];
-                    expression[i - 1] = double.Parse(number);
-                    expression!.RemoveAt(i);
-                    expression!.RemoveAt(i);
-                }
-                catch (Exception)
-                {
-                    return null;
-                }
-            }
+            if (Eat('*'))
+                value *= ParseFactor();
+            else if (Eat('/'))
+                value /= ParseFactor();
             else
-            {
-                i++;
-            }
+                return value;
         }
-        return expression;
     }
 
-    private static ArrayList? ConvertNegativeNumbers(ArrayList expression)
+    // factor → unary (^ unary | r unary)*
+    private double ParseFactor()
     {
-        for (int i = 0; i < expression!.Count; i++)
+        double value = ParseUnary();
+
+        while (true)
         {
-            if ((expression[i]!.ToString() == OPERATOR_SUBSTRACT))
-            {
-                if (i == (expression!.Count - 1)) return null;
-
-                if ((expression[i + 1]!.ToString() == OPERATOR_SUBSTRACT))
-                {
-                    // double negative
-                    expression[i] = OPERATOR_ADD;
-                    expression[i + 1] = "";
-                }
-                else if (i == 0 && expression[i + 1] is double)
-                {
-                    expression[i] = "";
-                    expression[i + 1] = (double)expression[i + 1]! * -1;
-                }
-                else if (i > 0 && (expression[i - 1] is double) && expression[i + 1] is double)
-                {
-                    expression[i] = "";
-                    expression[i + 1] = (double)expression[i + 1]! * -1;
-                }
-            }
-        }
-
-        while (expression!.Contains(""))
-        {
-            expression.Remove("");
-        }
-        return expression;
-    }
-
-    private static ArrayList? Calculate1ValueExpression(ArrayList? expression, String operation_symbol, EnumFunctionValueDirection direction, Func<double, double?> CalculationFunction)
-    {
-        int i = 0;
-        while (i < expression!.Count)
-        {
-            if ((expression[i]!.ToString() == operation_symbol))
-            {
-                if (i == 0 && direction == EnumFunctionValueDirection.LEFT)
-                {
-                    return null;
-                }
-                if (i == (expression!.Count - 1) && direction == EnumFunctionValueDirection.RIGHT)
-                {
-                    return null;
-                }
-                if (!(expression[i - 1] is double) && direction == EnumFunctionValueDirection.LEFT)
-                {
-                    return null;
-                }
-                if (!(expression[i + 1] is double) && direction == EnumFunctionValueDirection.RIGHT)
-                {
-                    return null;
-                }
-
-                double? result;
-                var s = expression[i + 1]?.ToString() ?? "";
-                if (direction == EnumFunctionValueDirection.LEFT)
-                {
-                    double num = double.Parse(s);
-                    result = CalculationFunction.Invoke(num);
-                    if (result == null) return null;
-                    // Remove unnecessary elements and update value
-                    expression[i - 1] = result;
-                    expression!.RemoveAt(i);
-                    i = i - 1;
-                }
-                else if (direction == EnumFunctionValueDirection.RIGHT)
-                {
-                    double num = double.Parse(s);
-                    result = CalculationFunction.Invoke(num);
-                    if (result == null) return null;
-                    // Remove unnecessary elements and update value
-                    expression[i] = result;
-                    expression!.RemoveAt(i + 1);
-                }
-                else
-                {
-                    i++;
-                }
-            }
+            if (Eat('^'))
+                value = Math.Pow(value, ParseUnary());
+            else if (Eat('r'))
+                value = Math.Pow(ParseUnary(), 1.0 / value);  // a r b = b^(1/a)
             else
-            {
-                i++;
-            }
+                return value;
         }
-
-        return expression;
     }
 
-    private static ArrayList? Calculate2ValueExpressions(ArrayList? expression, String operation_symbol, Func<double, double, double?> CalculationFunction)
+    // unary → (+|-) unary | primary
+    private double ParseUnary()
     {
-        int i = 0;
-        while (i < expression!.Count)
+        if (Eat('+')) return ParseUnary();
+        if (Eat('-')) return -ParseUnary();
+        return ParsePrimary();
+    }
+
+    // primary → number | function primary | '(' expression ')' | factorial
+    private double ParsePrimary()
+    {
+        char c = Peek();
+
+        // Functions: S s C c T h l L r
+        if (char.IsLetter(c))
         {
-            var c = expression[i]!.ToString();
-            if ((c == operation_symbol))
-            {
-                var prev_num = double.Parse(expression[i - 1]!.ToString()!);
-                var next_num = double.Parse(expression[i + 1]!.ToString()!);
-                var result = CalculationFunction.Invoke(prev_num, next_num);
-                if (result == null) return null;
-                // Remove unnecessary elements and update value
-                expression[i - 1] = result;
-                expression!.RemoveAt(i);
-                expression!.RemoveAt(i);
-                i = i - 1;
-            }
-            else
-            {
-                i++;
-            }
+            string f = ReadFunction();
+            double arg = ParsePrimary();
+            return ApplyFunction(f, arg);
         }
-        return expression;
-    }
 
-    private static double CalculateFactorial(double number)
-    {
-        if (number < 0) return 0.0;
-        if (number == 0) return 1.0;
-        if (number == 1) return 1.0;
-        if (number == 2) return 2.0;
-        int total = 1;
-        for (int n = 1; n <= number; n++) total *= n;
-        return total;
-    }
-
-    private static double? CalculatePermutation(double n, double r)
-    {
-        if (n < r || n < 0 || r < 0) return null;
-        return CalculateFactorial(n) / CalculateFactorial(n - r);
-    }
-
-    private static double? CalculateCombinations(double n, double r)
-    {
-        if (n < r || n < 0 || r < 0) return null;
-        return CalculateFactorial(n) / (CalculateFactorial(r) * CalculateFactorial(n - r));
-    }
-
-    private static double? CalculateMath(ArrayList expr)
-    {
-        try
+        // Parentheses
+        if (Eat('('))
         {
-            // factorial and nPr and nCr
-            var expression = Calculate1ValueExpression(expr, CalQl8r.OPERATOR_FACTORIAL, EnumFunctionValueDirection.LEFT, num => CalculateFactorial(num));
-            if (expression == null) return null;
+            double val = ParseExpression();
+            if (!Eat(')'))
+                throw new Exception("Missing closing parenthesis");
 
-            expression = Calculate2ValueExpressions(expression, CalQl8r.PERMUTATIONS, CalculatePermutation);
-            if (expression == null) return null;
+            if (Eat('!'))
+                return Factorial(val);
 
-            expression = Calculate2ValueExpressions(expression, CalQl8r.COMBINATIONS, CalculateCombinations);
-            if (expression == null) return null;
-
-            // calculate trigonometry
-
-            expression = Calculate1ValueExpression(expression, CalQl8r.OPERATOR_SIN, EnumFunctionValueDirection.RIGHT, (number) => Math.Sin(number));
-            if (expression == null) return null;
-
-            expression = Calculate1ValueExpression(expression, CalQl8r.OPERATOR_SINH, EnumFunctionValueDirection.RIGHT, (number) => Math.Sinh(number));
-            if (expression == null) return null;
-
-            expression = Calculate1ValueExpression(expression, CalQl8r.OPERATOR_COS, EnumFunctionValueDirection.RIGHT, (number) => Math.Cos(number));
-            if (expression == null) return null;
-
-            expression = Calculate1ValueExpression(expression, CalQl8r.OPERATOR_COSH, EnumFunctionValueDirection.RIGHT, (number) => Math.Cosh(number));
-            if (expression == null) return null;
-
-            expression = Calculate1ValueExpression(expression, CalQl8r.OPERATOR_TAN, EnumFunctionValueDirection.RIGHT, (number) => Math.Tan(number));
-            if (expression == null) return null;
-
-            expression = Calculate1ValueExpression(expression, CalQl8r.OPERATOR_TANH, EnumFunctionValueDirection.RIGHT, (number) => Math.Tanh(number));
-            if (expression == null) return null;
-
-            // calculate logarithms
-            expression = Calculate1ValueExpression(expression, CalQl8r.OPERATOR_LOG10, EnumFunctionValueDirection.RIGHT, (number) => Math.Log(number) / Math.Log(10));
-            if (expression == null) return null;
-
-            expression = Calculate1ValueExpression(expression, CalQl8r.OPERATOR_LN, EnumFunctionValueDirection.RIGHT, (a) => Math.Log(a));
-            if (expression == null) return null;
-
-            expression = Calculate2ValueExpressions(expression, CalQl8r.OPERATOR_LOGx, (a, b) => Math.Log(a) / Math.Log(b));
-            if (expression == null) return null;
-
-            // calculate exponents and roots
-            expression = Calculate2ValueExpressions(expression, CalQl8r.OPERATOR_POW, (a, b) => Math.Pow(a, b));
-            if (expression == null) return null;
-
-            expression = Calculate2ValueExpressions(expression, CalQl8r.OPERATOR_ROOT, (a, b) => Math.Pow(b, 1 / a));
-            if (expression == null) return null;
-
-            // calculate basic arithmetic
-            expression = Calculate2ValueExpressions(expression, CalQl8r.OPERATOR_DIVIDE, (a, b) => a / b);
-            if (expression == null) return null;
-
-            expression = Calculate2ValueExpressions(expression, CalQl8r.OPERATOR_MULTPILY, (a, b) => a * b);
-            if (expression == null) return null;
-
-            expression = Calculate2ValueExpressions(expression, CalQl8r.OPERATOR_SUBSTRACT, (a, b) => a - b);
-            if (expression == null) return null;
-
-            expression = Calculate2ValueExpressions(expression, CalQl8r.OPERATOR_ADD, (a, b) => a + b);
-            if (expression == null) return null;
-
-            if (expression!.Count != 1) return null;
-            if (!(expression[0] is double)) return null;
-
-            return double.Parse(expression[0]!.ToString()!);
+            return val;
         }
-        catch (Exception)
-        {
-            return null;
-        }
+
+        // Numbers or π constant
+        double number = ParseNumber();
+
+        if (Eat('!'))
+            return Factorial(number);
+
+        return number;
     }
 
-    private static ArrayList? CalculateInnermostBrackets(ArrayList expression, Func<ArrayList, double?> Calculation)
+    private string ReadFunction()
     {
-        int last_open_bracket = -1;
-        int first_close_bracket = -1;
-        int count_open_bracket = 0;
-        int count_close_bracket = 0;
-        for (int i = 0; i < expression!.Count; i++)
-        {
-            if ((expression[i]!.ToString() == "("))
-            {
-                last_open_bracket = i;
-                count_open_bracket += 1;
-            }
-            else if ((expression[i]!.ToString() == ")"))
-            {
-                count_close_bracket += 1;
-                if (first_close_bracket == -1)
-                {
-                    first_close_bracket = i;
-                }
-            }
-
-            // Syntax error
-            if (count_close_bracket > count_open_bracket) return null;
-
-            // when the number of open brackets and closing brackets match.
-            // 'last_open_bracket' is the start and 'first_close_bracket' is the end. for the calculation
-            if (count_open_bracket == count_close_bracket && (first_close_bracket != -1))
-            {
-                var start = last_open_bracket + 1;
-                var end = first_close_bracket;
-                var bracket_expression = new ArrayList();
-                for(int j = start; j < end; j++) {
-                    bracket_expression.Add(expression[j]);
-                }
- 
-                var value = Calculation(bracket_expression);
-                if (value == null) return null;
- 
-                expression[last_open_bracket] = value;
-    
-                // remove all elements from last_open_bracket to first_close_bracket
-                for (int j = last_open_bracket + 1; j <= first_close_bracket; j++)
-                {
-                    expression!.RemoveAt(last_open_bracket + 1);
-                }
-                return expression;
-            }
-        }
-
-        return expression;
+        string f = "";
+        while (char.IsLetter(Peek()))
+            f += Next();
+        return f;
     }
 
-
-
-
-    static void Main(string[] args)
+    private double ParseNumber()
     {
-
-        var expression = new ArrayList();
-
-        // construct expression for arguments e.g 1+1 +2 /4 *4
-        // white spaces are automatically handled by joining each argument
-        for (int i = 0; i < args.Length; i++) {
-            for (int j = 0; j < args[i].Length; j++) {
-                if (args[i][j] != ' '){
-                    expression.Add(args[i][j].ToString());
-                }                
-            }
+        if (Peek() == 'p') // π constant
+        {
+            Next();
+            return Math.PI;
         }
 
-        // create the number from string
-        expression = ConstructNumbersFromStringOfIntegers(expression);
-        if (expression == null) {
-            Console.WriteLine("INVALID NUMBER FORMAT");
-            return;
-        }
+        string number = "";
+        while (char.IsDigit(Peek()) || Peek() == '.')
+            number += Next();
 
-        // calculate decimal numbers
-        expression = ConstructDecimalNumbers(expression!);
-        if (expression == null) {
-            Console.WriteLine("INVALID DECIMAL NUMBER FORMAT");
-            return;
-        }
+        if (number.Length == 0)
+            throw new Exception("Number expected");
 
-        // replace all PI symbols with value
-        string[] pis = {"π", "PI", "pi", "p"};
-        for (int i = 0; i < expression!.Count; i++) {
-            bool piExists = pis.Contains(expression[i]!.ToString());
-            if (piExists) expression[i] = Math.PI;
-        }
+        return double.Parse(number);
+    }
 
-        // convert negative numbers
-        expression = ConvertNegativeNumbers(expression!);
-        if (expression == null){
-            Console.WriteLine("INVALID NEGATIVE NUMBER FORMAT");
-            return;
-        }
+    private double ApplyFunction(string f, double x)
+    {
+        return f switch
+        {
+            "S" => Math.Sin(x),
+            "s" => Math.Sinh(x),
+            "C" => Math.Cos(x),
+            "c" => Math.Cosh(x),
+            "T" => Math.Tan(x),
+            "h" => Math.Tanh(x),
+            "l" => Math.Log(x),
+            "L" => Math.Log10(x),
+            "r" => Math.Sqrt(x),
+            _ => throw new Exception("Unknown function: " + f),
+        };
+    }
 
-        // Calculate inner bracket expressions
-        do {
-            expression = CalculateInnermostBrackets(expression, (list) => CalculateMath(list));
-            if (expression == null) {
-                Console.WriteLine("MATH ERROR");
-                return;
-            }
-        } while (expression!.Contains("("));
-
-        var value = CalculateMath(expression);
-        if (value == null)  {
-            Console.WriteLine("MATH ERROR");
-            return;
-        }
-
-        Console.WriteLine(value);
+    private double Factorial(double n)
+    {
+        if (n < 0) throw new Exception("Factorial of negative number");
+        double result = 1;
+        for (int i = 2; i <= (int)n; i++)
+            result *= i;
+        return result;
     }
 }
