@@ -340,11 +340,11 @@ List<dynamic>? calculate_innermost_brackets(
 }
 
 void main(List<String> args) {
-  if (args.length < 1) return print("PLEASE ADD AN EXPRESSION TO CALCULATE");
+  if (args.length <= 1) return print("PLEASE ADD AN EXPRESSION TO CALCULATE");
   List<dynamic>? expression = [];
 
-  // construct expression for agruments e.g 1+1 +2 /4 *4
-  // whitesplaces are automatically handled by joining each argument
+  // construct expression for arguments e.g 1+1 +2 /4 *4
+  // whitespaces are automatically handled by joining each argument
   for (var arg in args) for (var c in arg.split("")) expression.add(c);
 
   // calculate integer numbers

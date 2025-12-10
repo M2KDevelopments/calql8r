@@ -6,26 +6,26 @@ import java.util.Objects;
 
 public class Main {
 
-    private static String DECIMAL_POINT = ".";
-    private static String OPERATOR_ADD = "+";
-    private static String OPERATOR_SUBSTRACT = "-";
-    private static String OPERATOR_MULTPILY = "*";
-    private static String OPERATOR_DIVIDE = "/";
-    private static String OPERATOR_LOGx = "l";
-    private static String OPERATOR_POW = "^";
-    private static String OPERATOR_ROOT = "r";
-    private static String OPERATOR_SIN = "S";
-    private static String OPERATOR_SINH = "s";
-    private static String OPERATOR_COS = "C";
-    private static String OPERATOR_COSH = "c";
-    private static String OPERATOR_TAN = "T";
-    private static String OPERATOR_TANH = "t";
-    private static String OPERATOR_LOG10 = "L";
-    private static String OPERATOR_LN = "E";
-    private static String OPERATOR_FACTORIAL = "!";
+    private static final String DECIMAL_POINT = ".";
+    private static final String OPERATOR_ADD = "+";
+    private static final String OPERATOR_SUBSTRACT = "-";
+    private static final String OPERATOR_MULTPILY = "*";
+    private static final String OPERATOR_DIVIDE = "/";
+    private static final String OPERATOR_LOGx = "l";
+    private static final String OPERATOR_POW = "^";
+    private static final String OPERATOR_ROOT = "r";
+    private static final String OPERATOR_SIN = "S";
+    private static final String OPERATOR_SINH = "s";
+    private static final String OPERATOR_COS = "C";
+    private static final String OPERATOR_COSH = "c";
+    private static final String OPERATOR_TAN = "T";
+    private static final String OPERATOR_TANH = "t";
+    private static final String OPERATOR_LOG10 = "L";
+    private static final String OPERATOR_LN = "E";
+    private static final String OPERATOR_FACTORIAL = "!";
 
-    private static String PERMUTATIONS = "Y";
-    private static String COMBINATIONS = "Z";
+    private static final String PERMUTATIONS = "Y";
+    private static final String COMBINATIONS = "Z";
 
     private enum EnumFunctionValueDirection {LEFT, RIGHT}
 
@@ -326,7 +326,7 @@ public class Main {
 
     public static void main(String[] args) {
 
-        if (args.length < 1) {
+        if (args.length <= 1) {
             System.out.println("PLEASE ADD AN EXPRESSION TO CALCULATE");
             return;
         }

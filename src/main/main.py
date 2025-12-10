@@ -313,7 +313,7 @@ def calculate_innermost_brackets(expression:list, calculate_math: Callable[[list
 def main():
 
 
-    if len(sys.argv) < 1:
+    if len(sys.argv) <= 1:
         return print("PLEASE ADD AN EXPRESSION TO CALCULATE")
 
 
