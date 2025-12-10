@@ -312,7 +312,9 @@ fun main(args: Array<String>) {
     // white spaces are automatically handled by joining each argument
     for (i in 1 until args.size) {
         for (j in 0 until args[i].length) {
-            expression?.add(args[i][j].toString())
+            if(args[i][j].toString() != " "){
+                expression?.add(args[i][j].toString())
+            }
         }
     }
 

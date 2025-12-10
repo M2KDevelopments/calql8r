@@ -397,7 +397,9 @@ class CalQl8r
         // white spaces are automatically handled by joining each argument
         for (int i = 0; i < args.Length; i++) {
             for (int j = 0; j < args[i].Length; j++) {
-                expression.Add(args[i][j].ToString());
+                if (args[i][j] != ' '){
+                    expression.Add(args[i][j].ToString());
+                }                
             }
         }
 

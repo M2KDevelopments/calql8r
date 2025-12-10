@@ -323,7 +323,8 @@ def main():
     for i in range(1, len(sys.argv)):
         arg = sys.argv[i]
         for j in range(0, len(arg)):
-            expression.append(arg[j])
+            if arg[j] != ' ':
+                expression.append(arg[j])
 
 
     expression = construct_numbers_from_string_of_integers(expression)

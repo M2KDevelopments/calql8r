@@ -345,7 +345,13 @@ void main(List<String> args) {
 
   // construct expression for arguments e.g 1+1 +2 /4 *4
   // whitespaces are automatically handled by joining each argument
-  for (var arg in args) for (var c in arg.split("")) expression.add(c);
+  for (var arg in args) {
+    for (var c in arg.split("")) {
+      if(c != ' '){
+        expression.add(c);
+      }   
+    }
+  }
 
   // calculate integer numbers
   expression = construct_numbers_from_string_of_integers(expression);

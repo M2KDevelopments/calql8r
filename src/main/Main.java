@@ -337,7 +337,9 @@ public class Main {
         // white spaces are automatically handled by joining each argument
         for (int i = 1; i < args.length; i++) {
             for (int j = 0; j < args[i].length(); j++) {
-                expression.add(Character.toString(args[i].charAt(j)));
+                if (args[i].charAt(j) != ' '){ //skip white space
+                    expression.add(Character.toString(args[i].charAt(j)));
+                }
             }
         }
 

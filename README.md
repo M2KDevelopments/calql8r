@@ -50,6 +50,12 @@ My Calculate library implementation in multiple languages
 node src/main/main.js "1+1"
 ```
 
+## Run it with Golang
+```bash
+# https://go.dev/doc/install
+go run src/main/main.go "1.1+1.1"
+```
+
 
 ## Run it with Java 
 ```bash

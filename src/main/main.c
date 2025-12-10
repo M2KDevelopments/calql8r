@@ -47,7 +47,7 @@
 #define CAL_ERROR_MATH -2
 
 #define ARRAY_MAX_SIZE 80
-
+#define FACTORIAL_LIMIT 69
 
 struct Element{
     double value;
@@ -558,6 +558,7 @@ struct Element calculate_log(double base, double raised){
 int resolve_factorial(int num){
     if(num < 0) return 0;
     if(num == 0) return 1;
+    if (num > FACTORIAL_LIMIT) return 0;
     int total = 1;
     for(int n = 1; n <= num; n++) total*=n;
     return total;
@@ -772,7 +773,9 @@ int main(int argc, char *argv[]){
     int count = 0;
     for(int i = 1; i < argc; i++) {
         for(int j =0; j < strlen(argv[i]); j++) {
-            expression[count++] = argv[i][j];
+            if(argv[i][j] != ' '){
+                expression[count++] = argv[i][j];
+            }
         }
     }
     
